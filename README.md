@@ -22,7 +22,6 @@ Cement, iron and steel, aluminium, fertilizers, electricity, hydrogen
 ## Repository Structure
 
 ```
-
 cbam-analysis/
 ├── data/
 │   ├── raw/          # untouched source files
@@ -32,5 +31,4 @@ cbam-analysis/
 ├── db/               # SQLite database of processed data
 ├── README.md
 └── requirements.txt
-
 ```
