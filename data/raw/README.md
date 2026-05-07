@@ -1,11 +1,25 @@
 # Raw Data Sources
 
 ## CBAM Default Values (Definitive Period)
-- File: `cbam_default_values_definitive.xlsx`
+- File: `DVs as adopted_v20260204.xlsx`
 - Source: European Commission, Taxation and Customs Union
 - URL: https://taxation-customs.ec.europa.eu/carbon-border-adjustment-mechanism/cbam-legislation-and-guidance_en#default-values-and-benchmarks-definitive-period
 - Downloaded: 2025-05-07
-- Notes: Official EU default emission values for use from 2026 onwards
+- Legal basis: Commission Implementing Regulation (EU) 2025/2621
+- Notes: Convenience file structured by country for data extraction.
+  Values are informational; legally binding values are in the regulation itself.
+
+## CBAM Default Values Legal Basis (Definitive Period)
+- File: not stored locally (40MB). Access via official source link below.
+- Source: EUR-Lex, Official Journal of the European Union
+- URL: https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=OJ:L_202502621
+- ELI: http://data.europa.eu/eli/reg_impl/2025/2621/oj
+- Citation: Commission Implementing Regulation (EU) 2025/2621 of 16 December 
+  2025 laying down rules for the application of Regulation (EU) 2023/956 
+  of the European Parliament and of the Council as regards the establishment 
+  of default values
+- Notes: Authoritative legal source for all definitive period default values.
+  Reference this when citing CBAM threshold figures.
 
 ## JRC GHG Emission Intensities Report
 - File: `JRC134682.pdf`
