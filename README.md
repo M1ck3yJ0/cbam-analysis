@@ -19,9 +19,18 @@ for trade competitiveness?
 ## CBAM-Covered Materials
 Cement, iron and steel, aluminium, fertilizers, electricity, hydrogen
 
-## Project Structure
-- data/raw: untouched source files
-- data/processed: cleaned and structured outputs
-- notebooks: exploration and EDA
-- src: reusable functions and modules
-- db: SQLite database created from processed data
+## Repository Structure
+
+```
+
+cbam-analysis/
+├── data/
+│   ├── raw/          # untouched source files
+│   └── processed/    # cleaned structured outputs
+├── notebooks/        # exploration and EDA
+├── src/              # reusable functions and modules
+├── db/               # SQLite database of processed data
+├── README.md
+└── requirements.txt
+
+```
