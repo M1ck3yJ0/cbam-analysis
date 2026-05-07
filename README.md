@@ -24,4 +24,4 @@ Cement, iron and steel, aluminium, fertilizers, electricity, hydrogen
 - data/processed: cleaned and structured outputs
 - notebooks: exploration and EDA
 - src: reusable functions and modules
-- db: SQLite database
+- db: SQLite database created from processed data
