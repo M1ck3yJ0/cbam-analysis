@@ -45,3 +45,32 @@
 - Downloaded: 2025-05-07
 - Notes: Hydrogen-specific emission intensity data to complement JRC134682. 
   Covers global average only, not country-level breakdown.
+
+## Ember Yearly Electricity Data
+- File: `yearly_full_release_long_format.csv`
+- Source: Ember Energy
+- URL: https://ember-energy.org/data/yearly-electricity-data/
+- Downloaded: 2026-05-08
+- License: Creative Commons Attribution 4.0 (CC BY 4.0)
+- Notes: Long format file containing multiple electricity variables across
+  200+ geographies from 2000 onwards. Will be filtered in extraction
+  notebook to three variable types:
+
+  1. CO2 intensity (gCO2/kWh): Category = "Power sector emissions",
+     Subcategory = "CO2 intensity", Variable = "CO2 intensity"
+     Primary metric for contextualizing indirect emissions in CBAM defaults.
+
+  2. Installed capacity by fuel type (GW): Category = "Capacity",
+     Subcategory = "Fuel", Variables = Coal, Gas, Hydro, Nuclear, Solar,
+     Wind, Other Renewables. Plus Aggregate Clean and Fossil totals.
+     Used to assess clean energy infrastructure in place.
+
+  3. Electricity generation by fuel type (TWh): Category = "Electricity
+     generation", Subcategory = "Fuel", same variables as capacity.
+     Used to compare actual generation against installed capacity,
+     revealing utilization gaps and grid composition.
+
+  Together these three layers support analysis of not just how dirty a
+  country's grid is, but why, and how much structural capacity exists
+  for improvement.
+  
