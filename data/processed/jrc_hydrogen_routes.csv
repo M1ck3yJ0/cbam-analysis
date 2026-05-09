@@ -1,7 +1,7 @@
-feedstock_type,total_emissions_tco2_per_th2,comments,source
-Natural gas,9.0,,IEA 2023
-Coal,19.2,,IEA 2023
-Naphtha (by-product),7.0,"Value considers natural gas covering heat requirements, substituting for exported hydrogen.",Lee & Elgowainy 2018
-Oil,12.0,,IEA 2019
-Electrolysis (chlor-alkali),7.0,"Value considers natural gas covering heat requirements, substituting for exported hydrogen.",Lee et al. 2018
-"Electrolysis (water, world average)",23.1,High emissions due to current global grid mix. Negligible impact on global average given small production volumes.,IEA 2023
+cn_code,feedstock_type,total_emissions_tco2_per_th2,comments,source
+2804 10 00,Natural gas,9.0,,IEA 2023
+2804 10 00,Coal,19.2,,IEA 2023
+2804 10 00,Naphtha (by-product),7.0,"Value considers natural gas covering heat requirements, substituting for exported hydrogen.",Lee & Elgowainy 2018
+2804 10 00,Oil,12.0,,IEA 2019
+2804 10 00,Electrolysis (chlor-alkali),7.0,"Value considers natural gas covering heat requirements, substituting for exported hydrogen.",Lee et al. 2018
+2804 10 00,"Electrolysis (water, world average)",23.1,High emissions due to current global grid mix. Negligible impact on global average given small production volumes.,IEA 2023
