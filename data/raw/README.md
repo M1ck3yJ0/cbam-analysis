@@ -11,19 +11,6 @@
   of default values
 - Notes: Authoritative legal source for all definitive period default values.
   Reference this when citing CBAM threshold figures.
-
-## JRC GHG Emission Intensities Report
-- File: `JRC134682.pdf`
-- Source: European Commission, Joint Research Centre
-- URL: https://publications.jrc.ec.europa.eu/repository/handle/JRC134682
-- DOI: https://data.europa.eu/doi/10.2760/359533
-- Citation: Vidovic, D., Marmier, A., Zore, L. and Moya, J., Greenhouse gas 
-  emission intensities of the steel, fertilisers, aluminium and cement 
-  industries in the EU and its main trading partners, Publications Office 
-  of the European Union, Luxembourg, 2023
-- Downloaded: 2025-05-07
-- Notes: Primary source for country-level emission intensities by material 
-  and production route. Underpins CBAM default values.
   
 ## JRC GHG Emission Intensity of Hydrogen Production
 - File: `JRC135067.pdf`
