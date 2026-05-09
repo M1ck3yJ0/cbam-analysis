@@ -80,3 +80,21 @@
   Electricity excluded from scope. Dataset DS-059322 previously
   referenced in planning is no longer available for API dissemination
   as of May 2026, replaced by DS-045409.
+
+## Worldsteel Sustainability Indicators 2025
+- File: not stored locally (manually transcribed from published table)
+- Source: World Steel Association (Worldsteel)
+- URL: https://worldsteel.org/wider-sustainability/sustainability-indicators/
+- Accessed: 2026-05-09
+- License: Worldsteel open publication, free to cite with attribution
+- Citation: World Steel Association, Sustainability Indicators Report 2025,
+  worldsteel.org, February 2026
+- Notes: Table "CO2 emissions and energy intensity, 2022-2024" manually
+  transcribed into steel_route_intensities.csv. Covers three production
+  routes (BF-BOF, Scrap-EAF, DRI-EAF) plus global weighted average.
+  Global averages only, no country-level breakdown publicly available.
+  DRI-EAF denominator estimated by Worldsteel from collective databases
+  as global DRI production data is not directly collected.
+  Cross-checked against IRENA Iron and Steel report (2024) and
+  World Steel in Figures 2025.
+  
