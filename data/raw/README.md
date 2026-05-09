@@ -1,14 +1,5 @@
 # Raw Data Sources
 
-## CBAM Default Values (Definitive Period)
-- File: `DVs as adopted_v20260204.xlsx`
-- Source: European Commission, Taxation and Customs Union
-- URL: https://taxation-customs.ec.europa.eu/carbon-border-adjustment-mechanism/cbam-legislation-and-guidance_en#default-values-and-benchmarks-definitive-period
-- Downloaded: 2025-05-07
-- Legal basis: Commission Implementing Regulation (EU) 2025/2621
-- Notes: Convenience file structured by country for data extraction.
-  Values are informational; legally binding values are in the regulation itself.
-
 ## CBAM Default Values Legal Basis (Definitive Period)
 - File: not stored locally (40MB). Access via official source link below.
 - Source: EUR-Lex, Official Journal of the European Union
@@ -74,3 +65,18 @@
   country's grid is, but why, and how much structural capacity exists
   for improvement.
   
+  ## Eurostat COMEXT Trade Data
+- File: not stored locally (API pull)
+- Source: Eurostat COMEXT Database
+- Dataset: DS-045409 - EU trade since 1988 by HS2-4-6 and CN8
+- API endpoint: https://ec.europa.eu/eurostat/api/comext/dissemination
+- Accessed via: eurostat Python package (pip install eurostat)
+- Pulled: 2026-05-09
+- License: Eurostat open data, free reuse with attribution
+- Notes: EU27 aggregate imports only (reporter = EU27_2020), flow = 1
+  (imports). All partner countries returned. CBAM-covered CN codes only,
+  batched by material group. Years 2020-2024. Both VALUE_IN_EUROS and
+  QUANTITY_IN_100KG (converted to tonnes in processed output).
+  Electricity excluded from scope. Dataset DS-059322 previously
+  referenced in planning is no longer available for API dissemination
+  as of May 2026, replaced by DS-045409.
