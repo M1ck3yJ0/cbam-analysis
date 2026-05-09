@@ -97,4 +97,3 @@
   as global DRI production data is not directly collected.
   Cross-checked against IRENA Iron and Steel report (2024) and
   World Steel in Figures 2025.
-  
