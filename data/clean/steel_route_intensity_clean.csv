@@ -1,0 +1,13 @@
+production_route,year,co2_intensity_tco2_per_t,energy_intensity_gj_per_t
+BF-BOF,2022,2.33,23.98
+BF-BOF,2023,2.33,24.24
+BF-BOF,2024,2.34,23.88
+Scrap-EAF,2022,0.67,10.13
+Scrap-EAF,2023,0.69,10.21
+Scrap-EAF,2024,0.69,9.84
+DRI-EAF,2022,1.36,22.25
+DRI-EAF,2023,1.43,23.13
+DRI-EAF,2024,1.47,23.3
+Global avg,2022,1.92,21.01
+Global avg,2023,1.92,21.3
+Global avg,2024,1.92,20.95
