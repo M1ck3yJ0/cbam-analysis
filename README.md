@@ -21,6 +21,14 @@ the greatest CBAM exposure, why, and what pathways exist to reduce it.
 ## CBAM-Covered Materials
 Cement, iron and steel, aluminium, fertilizers, hydrogen, electricity
 
+**Note on electricity:** Electricity is covered by CBAM but works
+differently from the other five sectors. Rather than using a per-tonne
+default emission value, CBAM charges on imported electricity are based
+on how carbon-intensive the exporting country's power grid is. For this
+reason, electricity is excluded from the trade flow data but grid carbon
+intensity data from Ember is included in the dataset and covers all
+215 countries.
+
 ## Data Sources
 See `data/raw/README.md` for full source documentation and provenance.
 Key sources include EU Commission CBAM default values (Commission
