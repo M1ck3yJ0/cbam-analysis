@@ -84,3 +84,19 @@
   as global DRI production data is not directly collected.
   Cross-checked against IRENA Iron and Steel report (2024) and
   World Steel in Figures 2025.
+
+## Worldsteel World Steel in Figures 2025
+- File: `World-Steel-in-Figures-2025.pdf`
+- Source: World Steel Association (Worldsteel)
+- URL: https://worldsteel.org/data/world-steel-in-figures/world-steel-in-figures-2025/
+- Accessed: 2026-05-12
+- License: Worldsteel open publication, free to cite with attribution
+- Citation: World Steel Association, World Steel in Figures 2025,
+  worldsteel.org, June 2025
+- Notes: Table "Crude steel production by process, 2024" (PDF page 6)
+  extracted via pdfplumber into steel_route_mix.csv. Covers 44 individual
+  countries plus 13 regional aggregates, accounting for approximately 100%
+  of world crude steel production in 2024. Figures marked 'e' are estimates.
+  OHF (open hearth furnace) production rolled into BOF category for analysis;
+  original ohf_pct retained in processed output. Regional aggregates used as
+  proxies for CBAM countries not individually listed, mapped in notebook 07.
