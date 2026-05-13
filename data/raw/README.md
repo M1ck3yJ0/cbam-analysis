@@ -100,3 +100,29 @@
   OHF (open hearth furnace) production rolled into BOF category for analysis;
   original ohf_pct retained in processed output. Regional aggregates used as
   proxies for CBAM countries not individually listed, mapped in notebook 07.
+
+## UN Comtrade Global Export Data
+- File: not stored locally (API pull)
+- Source: UN Comtrade Database
+- API endpoint: https://comtradeapi.un.org/data/v1/get/C/A/HS
+- Accessed via: comtradeapicall Python package (pip install comtradeapicall)
+- Pulled: 2026-05-13
+- License: UN Comtrade open data, free reuse with attribution
+- Notes: Total exports to the world (partner = 0) for all 119 CBAM countries
+  and CBAM-relevant 6-digit HS codes, years 2020-2024. Reporter-reported
+  data only. Latest available year used per (country, hs6_code) pair.
+  106 of 119 CBAM countries have data; 13 have no records across any year
+  in the 2020-2024 range. Values returned in USD, converted to EUR using
+  ECB 2024 annual average rate (see ECB entry below). HS6 codes may capture
+  some non-CBAM products sharing a 6-digit prefix with CBAM-covered CN8
+  codes; documented as a known limitation.
+
+## ECB EUR/USD Exchange Rate
+- File: not stored locally (hardcoded constant)
+- Source: European Central Bank Statistical Data Warehouse
+- URL: https://data.ecb.europa.eu/data/datasets/EXR/EXR.D.USD.EUR.SP00.A
+- Accessed: 2026-05-13
+- Notes: 2024 annual average rate used for USD to EUR conversion of Comtrade
+  export values. Rate applied: 1 EUR = 1.0821 USD. Annual average is an
+  approximation appropriate for annual aggregate trade values. Stored as
+  a named constant ECB_EURUSD_2024 in 07_clean_transform_data.ipynb.
