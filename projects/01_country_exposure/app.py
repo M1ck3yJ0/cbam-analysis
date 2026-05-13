@@ -132,26 +132,27 @@ con = get_connection()
 
 @st.cache_data
 def load_country_data():
-    """Country-level aggregated costs. One row per country, 119 rows."""
+    """Country-level aggregated costs joined with iso3 from crosswalk."""
     return pd.read_sql("""
         SELECT
-            country,
-            iso2,
-            iso3,
-            rank,
-            total_import_tonnes,
-            total_import_value_eur,
-            total_embedded_co2_high      AS embedded_co2_high,
-            total_embedded_co2_low       AS embedded_co2_low,
-            total_cbam_cost_high_route   AS cost_high,
-            total_cbam_cost_low_route    AS cost_low,
-            cbam_cost_pct_of_export_value_high AS cost_pct_export_high,
-            cbam_cost_pct_of_export_value_low  AS cost_pct_export_low,
-            cbam_cost_per_tonne_high     AS cost_per_tonne_high,
-            cbam_cost_per_tonne_low      AS cost_per_tonne_low,
-            has_any_route_variation
-        FROM cbam_cost_by_country
-        ORDER BY total_cbam_cost_high_route DESC
+            c.country,
+            c.iso2,
+            cw.iso3,
+            c.rank,
+            c.total_import_tonnes,
+            c.total_import_value_eur,
+            c.total_embedded_co2_high      AS embedded_co2_high,
+            c.total_embedded_co2_low       AS embedded_co2_low,
+            c.total_cbam_cost_high_route   AS cost_high,
+            c.total_cbam_cost_low_route    AS cost_low,
+            c.cbam_cost_pct_of_export_value_high AS cost_pct_export_high,
+            c.cbam_cost_pct_of_export_value_low  AS cost_pct_export_low,
+            c.cbam_cost_per_tonne_high     AS cost_per_tonne_high,
+            c.cbam_cost_per_tonne_low      AS cost_per_tonne_low,
+            c.has_any_route_variation
+        FROM cbam_cost_by_country c
+        LEFT JOIN country_crosswalk cw ON c.country = cw.country
+        ORDER BY c.total_cbam_cost_high_route DESC
     """, con)
 
 @st.cache_data
@@ -422,8 +423,8 @@ with tab1:
             thickness  = 12,
             len        = 0.6,
             tickfont   = dict(size=10),
-            titlefont  = dict(size=10),
-        ),
+            title_font = dict(size=10),
+),
         margin     = dict(l=0, r=0, t=0, b=0),
         paper_bgcolor = '#f8f7f4',
         plot_bgcolor  = '#f8f7f4',
