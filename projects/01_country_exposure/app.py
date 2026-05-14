@@ -3,14 +3,12 @@
 #
 # Layout:
 #   - Sticky filter bar: certificate price slider, sector multiselect,
-#     country selectbox — all in one row, coordinated with map clicks
+#     country selectbox — coordinated with map clicks
 #   - KPI cards (4 columns)
-#   - Choropleth map (click to filter country)
+#   - Choropleth map (click country to filter, click blank space to reset)
 #   - Horizontal bar chart (all countries, scrollable 600px container,
-#     outer bar stacked by sector high route,
-#     inner shaded bar = low route where variation exists)
-#   - Drill-down panel (global overview until country selected, then
-#     sector donut + high/low route grouped bar)
+#     dark bar = high route, light bar = low route where variation exists)
+#   - Drill-down panel (global overview until country selected)
 #   Tab 2: Grid Decarbonization (placeholder)
 #
 # Run from repo root:
@@ -34,7 +32,6 @@ st.set_page_config(
 # ── Theme constants ───────────────────────────────────────────────────────────
 BG         = '#f5f4f0'
 BG_CARD    = '#ffffff'
-BG_SIDEBAR = '#eae8e2'
 BORDER     = '#d3d1c9'
 TEXT_DARK  = '#18201a'
 TEXT_MID   = '#908e86'
@@ -76,13 +73,9 @@ h1, h2, h3 {{
     max-width: 1400px;
 }}
 
-/* Hide native sidebar toggle entirely */
-[data-testid="collapsedControl"] {{
-    display: none;
-}}
-[data-testid="stSidebar"] {{
-    display: none;
-}}
+/* Hide native sidebar */
+[data-testid="collapsedControl"] {{ display: none; }}
+[data-testid="stSidebar"] {{ display: none; }}
 
 /* Tabs */
 [data-testid="stTabs"] button {{
@@ -107,7 +100,7 @@ h1, h2, h3 {{
     margin-bottom: 1.25rem;
 }}
 
-/* Filter bar labels */
+/* Filter labels */
 .filter-label {{
     font-size: 0.65rem;
     font-weight: 600;
@@ -115,12 +108,6 @@ h1, h2, h3 {{
     text-transform: uppercase;
     color: {TEXT_LIGHT};
     margin-bottom: 0.15rem;
-}}
-
-/* Compact multiselect — hide tags, show count only */
-[data-testid="stMultiSelect"] [data-baseweb="select"] > div:first-child {{
-    overflow: hidden;
-    max-height: 38px;
 }}
 
 /* KPI cards */
@@ -176,14 +163,28 @@ h1, h2, h3 {{
     margin-bottom: 0.6rem;
 }}
 
-/* Multiselect tags — match palette */
+/* Multiselect tags — small neutral */
 [data-testid="stMultiSelect"] span[data-baseweb="tag"] {{
-    background-color: {ACCENT} !important;
-    color: white !important;
+    background-color: {BORDER} !important;
+    color: {TEXT_DARK} !important;
     border-radius: 4px !important;
+    font-size: 0.72rem !important;
+    padding: 0 6px !important;
+    height: 22px !important;
+    line-height: 22px !important;
 }}
 [data-testid="stMultiSelect"] span[data-baseweb="tag"] span {{
-    color: white !important;
+    color: {TEXT_DARK} !important;
+    font-size: 0.72rem !important;
+}}
+
+/* Slider thumb and active track — sage green */
+[data-testid="stSlider"] div[role="slider"] {{
+    background-color: {ACCENT} !important;
+    border-color: {ACCENT} !important;
+}}
+[data-testid="stSlider"] div[data-baseweb="slider"] div:nth-child(3) {{
+    background-color: {ACCENT} !important;
 }}
 
 /* Slim slider */
@@ -271,10 +272,6 @@ if 'selected_country' not in st.session_state:
 
 
 # ── Sticky filter bar ─────────────────────────────────────────────────────────
-# Rendered before tabs so it sits above everything and stays sticky.
-# Three controls in one row: certificate price slider, sector multiselect,
-# country selectbox. Country selectbox stays in sync with map clicks.
-
 st.markdown('<div class="filter-bar">', unsafe_allow_html=True)
 
 fc1, fc2, fc3 = st.columns([2, 2, 2])
@@ -302,15 +299,9 @@ with fc2:
         default          = ALL_SECTORS,
         label_visibility = 'collapsed',
         placeholder      = 'All sectors',
-        max_selections   = len(ALL_SECTORS),
     )
     if not selected_sectors:
         selected_sectors = ALL_SECTORS
-    # Show compact summary label
-    n_sel = len(selected_sectors)
-    n_all = len(ALL_SECTORS)
-    summary = 'All sectors' if n_sel == n_all else f'{n_sel} of {n_all} sectors'
-    st.caption(summary)
 
 with fc3:
     st.markdown('<p class="filter-label">Country</p>',
@@ -335,8 +326,6 @@ st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ── Derived data ──────────────────────────────────────────────────────────────
-# Filter by selected sectors and rescale costs to slider certificate price.
-
 price_ratio = cert_price / BASE_PRICE
 
 df_g = df_granular[df_granular['sector'].isin(selected_sectors)].copy()
@@ -412,7 +401,8 @@ with tab1:
 
     # ── Choropleth map ────────────────────────────────────────────────────────
     st.markdown(
-        '<p class="section-label">CBAM cost as share of export value — click a country to filter</p>',
+        '<p class="section-label">CBAM cost as share of export value — '
+        'click a country to filter · click blank space to reset</p>',
         unsafe_allow_html=True
     )
 
@@ -450,6 +440,7 @@ with tab1:
         },
     )
 
+    # Highlight selected country with terracotta border
     if st.session_state['selected_country']:
         sel_iso3 = df_countries.loc[
             df_countries['country'] == st.session_state['selected_country'], 'iso3'
@@ -498,17 +489,28 @@ with tab1:
         key                 = 'map_chart',
     )
 
-    # Handle map click: sync to country filter
-    if (map_event and map_event.get('selection')
-            and map_event['selection'].get('points')):
-        clicked_iso3 = map_event['selection']['points'][0].get('location')
-        if clicked_iso3:
-            match = df_countries[df_countries['iso3'] == clicked_iso3]
-            if not match.empty:
-                clicked_name = match.iloc[0]['country']
-                if clicked_name != st.session_state['selected_country']:
-                    st.session_state['selected_country'] = clicked_name
+    # Handle map click: country click filters, blank space resets
+    if map_event and map_event.get('selection'):
+        points = map_event['selection'].get('points', [])
+        if points:
+            clicked_iso3 = points[0].get('location')
+            if clicked_iso3:
+                match = df_countries[df_countries['iso3'] == clicked_iso3]
+                if not match.empty:
+                    clicked_name = match.iloc[0]['country']
+                    if clicked_name != st.session_state['selected_country']:
+                        st.session_state['selected_country'] = clicked_name
+                        st.rerun()
+            else:
+                # Clicked blank space within map area
+                if st.session_state['selected_country'] is not None:
+                    st.session_state['selected_country'] = None
                     st.rerun()
+        else:
+            # Selection cleared (empty points list)
+            if st.session_state['selected_country'] is not None:
+                st.session_state['selected_country'] = None
+                st.rerun()
 
     st.markdown('<br>', unsafe_allow_html=True)
 
@@ -518,21 +520,16 @@ with tab1:
     with col_bar:
         st.markdown(
             '<p class="section-label">Estimated CBAM cost by country — '
-            'outer bar = high route stacked by sector · '
-            'inner shaded bar = low route where cheaper route exists</p>',
+            'dark bar = high route · light bar = low route where cheaper route exists</p>',
             unsafe_allow_html=True
         )
 
         n_countries = len(df_c)
         bar_height  = max(n_countries * 22, 400)
 
-        df_all_sectors = (
-            df_g.groupby(['country', 'sector'], as_index=False)['cost_high'].sum()
-        )
-
         fig_bar = go.Figure()
 
-        # Single outer bar: total high-route cost per country
+        # Outer bar: total high-route cost, single flat color
         fig_bar.add_trace(go.Bar(
             name          = 'High route cost',
             y             = df_c['country'].tolist(),
@@ -540,10 +537,9 @@ with tab1:
             orientation   = 'h',
             marker_color  = ACCENT,
             hovertemplate = '<b>%{y}</b><br>High route: €%{x:,.0f}<extra></extra>',
-            showlegend    = True,
         ))
 
-        # Inner low-route bar only where route variation exists
+        # Inner bar: low route, overlaid, lighter green, only where variation exists
         df_varied = df_c[df_c['has_any_route_variation']]
         if len(df_varied) > 0:
             fig_bar.add_trace(go.Bar(
@@ -553,10 +549,9 @@ with tab1:
                 orientation   = 'h',
                 marker_color  = ACCENT_MID,
                 hovertemplate = '<b>%{y}</b><br>Low route: €%{x:,.0f}<extra></extra>',
-                showlegend    = True,
             ))
 
-        # Highlight selected country
+        # Dotted terracotta line marking selected country
         if st.session_state['selected_country']:
             sel = st.session_state['selected_country']
             if sel in df_c['country'].values:
@@ -569,7 +564,7 @@ with tab1:
                 )
 
         fig_bar.update_layout(
-            barmode       = 'overlay',    # inner bar overlays outer, not stacked
+            barmode       = 'overlay',
             yaxis         = dict(
                 autorange  = 'reversed',
                 tickfont   = dict(size=10, family='DM Sans', color=TEXT_DARK),
@@ -600,7 +595,6 @@ with tab1:
 
         with st.container(height=600):
             st.plotly_chart(fig_bar, use_container_width=True, key='bar_chart')
-
 
     # ── Drill-down panel ──────────────────────────────────────────────────────
     with col_drill:
@@ -671,14 +665,14 @@ with tab1:
                     name          = 'High route',
                     x             = df_varied_drill['sector'],
                     y             = df_varied_drill['cost_high'],
-                    marker_color  = '#5c6b5e',
+                    marker_color  = ACCENT,
                     hovertemplate = '%{x}<br>High: €%{y:,.0f}<extra></extra>',
                 ))
                 fig_range.add_trace(go.Bar(
                     name          = 'Low route',
                     x             = df_varied_drill['sector'],
                     y             = df_varied_drill['cost_low'],
-                    marker_color  = '#a8b5aa',
+                    marker_color  = ACCENT_MID,
                     hovertemplate = '%{x}<br>Low: €%{y:,.0f}<extra></extra>',
                 ))
                 fig_range.update_layout(
@@ -712,7 +706,7 @@ with tab1:
                 )
 
         else:
-            # Global overview until a country is selected
+            # Global overview
             st.markdown('<p class="drill-header">Global Overview</p>',
                         unsafe_allow_html=True)
             st.markdown(
@@ -723,7 +717,6 @@ with tab1:
                 unsafe_allow_html=True
             )
 
-            # Global sector donut
             st.markdown('<p class="section-label">Global cost by sector</p>',
                         unsafe_allow_html=True)
             df_sec = (
@@ -755,7 +748,6 @@ with tab1:
             st.plotly_chart(fig_gd, use_container_width=True,
                             key='global_donut')
 
-            # Global high vs low route by sector
             st.markdown(
                 '<p class="section-label">Global high vs low route by sector</p>',
                 unsafe_allow_html=True
@@ -770,14 +762,14 @@ with tab1:
                 name          = 'High route',
                 x             = df_global_route['sector'],
                 y             = df_global_route['cost_high'],
-                marker_color  = '#5c6b5e',
+                marker_color  = ACCENT,
                 hovertemplate = '%{x}<br>High: €%{y:,.0f}<extra></extra>',
             ))
             fig_gr.add_trace(go.Bar(
                 name          = 'Low route',
                 x             = df_global_route['sector'],
                 y             = df_global_route['cost_low'],
-                marker_color  = '#a8b5aa',
+                marker_color  = ACCENT_MID,
                 hovertemplate = '%{x}<br>Low: €%{y:,.0f}<extra></extra>',
             ))
             fig_gr.update_layout(
@@ -807,7 +799,6 @@ with tab1:
             st.plotly_chart(fig_gr, use_container_width=True,
                             key='global_range_chart')
 
-        # Data sources caption at bottom of drill-down
         st.markdown('<br>', unsafe_allow_html=True)
         st.caption(
             'Sources: EU Commission · Eurostat COMEXT · '
