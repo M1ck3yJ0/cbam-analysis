@@ -36,6 +36,7 @@ BORDER     = '#d3d1c9'
 TEXT_DARK  = '#18201a'
 TEXT_MID   = '#908e86'
 TEXT_LIGHT = '#b8b6ae'
+HIGHLIGHT  = '#ff4b4b'
 ACCENT     = '#3a6b45'
 ACCENT_MID = '#74b583'
 ACCENT_POP = '#c1653a'
@@ -490,8 +491,9 @@ with tab1:
     )
 
     # Handle map click: country click filters, blank space resets
-    if map_event and map_event.get('selection'):
-        points = map_event['selection'].get('points', [])
+    if (map_event and map_event.get('selection')
+            and map_event['selection'].get('points')):
+        points = map_event['selection']['points']
         if points:
             clicked_iso3 = points[0].get('location')
             if clicked_iso3:
@@ -501,16 +503,6 @@ with tab1:
                     if clicked_name != st.session_state['selected_country']:
                         st.session_state['selected_country'] = clicked_name
                         st.rerun()
-            else:
-                # Clicked blank space within map area
-                if st.session_state['selected_country'] is not None:
-                    st.session_state['selected_country'] = None
-                    st.rerun()
-        else:
-            # Selection cleared (empty points list)
-            if st.session_state['selected_country'] is not None:
-                st.session_state['selected_country'] = None
-                st.rerun()
 
     st.markdown('<br>', unsafe_allow_html=True)
 
@@ -520,7 +512,7 @@ with tab1:
     with col_bar:
         st.markdown(
             '<p class="section-label">Estimated CBAM cost by country — '
-            'dark bar = high route · light bar = low route where cheaper route exists</p>',
+            'bar = high route · tick mark = low route where cheaper route exists</p>',
             unsafe_allow_html=True
         )
 
@@ -529,7 +521,7 @@ with tab1:
 
         fig_bar = go.Figure()
 
-        # Outer bar: total high-route cost, single flat color
+        # Main bar: high-route cost, dark green
         fig_bar.add_trace(go.Bar(
             name          = 'High route cost',
             y             = df_c['country'].tolist(),
@@ -539,19 +531,27 @@ with tab1:
             hovertemplate = '<b>%{y}</b><br>High route: €%{x:,.0f}<extra></extra>',
         ))
 
-        # Inner bar: low route, overlaid, lighter green, only where variation exists
+        # Red tick line at low-route cost, only where variation exists
         df_varied = df_c[df_c['has_any_route_variation']]
         if len(df_varied) > 0:
-            fig_bar.add_trace(go.Bar(
+            fig_bar.add_trace(go.Scatter(
                 name          = 'Low route (best case)',
                 y             = df_varied['country'].tolist(),
                 x             = df_varied['cost_low'].tolist(),
-                orientation   = 'h',
-                marker_color  = ACCENT_MID,
+                mode          = 'markers',
+                marker        = dict(
+                    symbol    = 'line-ns',
+                    size      = 10,
+                    color     = HIGHLIGHT,
+                    line      = dict(
+                        color = HIGHLIGHT,
+                        width = 2.5,
+                    ),
+                ),
                 hovertemplate = '<b>%{y}</b><br>Low route: €%{x:,.0f}<extra></extra>',
             ))
 
-        # Dotted terracotta line marking selected country
+        # Dotted line marking selected country
         if st.session_state['selected_country']:
             sel = st.session_state['selected_country']
             if sel in df_c['country'].values:
@@ -560,7 +560,7 @@ with tab1:
                     type  = 'line',
                     x0    = 0, x1 = sel_cost,
                     y0    = sel, y1 = sel,
-                    line  = dict(color=ACCENT_POP, width=2, dash='dot'),
+                    line  = dict(color=TEXT_LIGHT, width=1.5, dash='dot'),
                 )
 
         fig_bar.update_layout(
