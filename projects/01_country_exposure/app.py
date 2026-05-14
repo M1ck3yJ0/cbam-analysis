@@ -3,12 +3,11 @@
 #
 # Streamlit dashboard with:
 #   Tab 1 — CBAM Cost Exposure
-#     - Choropleth map: CBAM cost as share of export value (log scale)
-#     - Horizontal bar chart: top 10 countries, outer bar = high route stacked
-#       by sector, inner shaded bar = low route total where variation exists
+#     - Choropleth map: CBAM cost as share of export value
+#     - Horizontal bar chart: top 10 countries, stacked by sector,
+#       inner shaded bar = low route total where variation exists
 #     - Drill-down panel: sector breakdown + route variation by sector
-#       for selected country (global view when no country selected)
-#   Tab 2 — Grid Decarbonization Potential (placeholder, built later)
+#   Tab 2 — Grid Decarbonization Potential (placeholder)
 #
 # Run from repo root:
 #   streamlit run projects/01_country_exposure/app.py
@@ -21,8 +20,6 @@ import streamlit as st
 from pathlib import Path
 
 # ── Page config ───────────────────────────────────────────────────────────────
-# Must be the first Streamlit call.
-
 st.set_page_config(
     page_title            = 'CBAM Country Exposure',
     page_icon             = '🌍',
@@ -30,92 +27,129 @@ st.set_page_config(
     initial_sidebar_state = 'expanded',
 )
 
-# ── Styling ───────────────────────────────────────────────────────────────────
-# DM Sans for body text, DM Serif Display for headlines.
-# Warm off-white background, slate text, EU blue accent (#003399).
+# ── Theme constants ───────────────────────────────────────────────────────────
+BG         = '#f5f4f0'   # warm off-white, main background
+BG_CARD    = '#ffffff'   # pure white for cards
+BG_SIDEBAR = '#eae8e2'   # slightly darker warm tone for sidebar
+BORDER     = '#d3d1c9'   # subtle warm border
+TEXT_DARK  = '#18201a'   # near-black with green undertone
+TEXT_MID   = '#908e86'   # warm mid grey
+TEXT_LIGHT = '#b8b6ae'   # light warm grey
+ACCENT     = '#3a6b45'   # sage green primary
+ACCENT_MID = '#74b583'   # sage green highlight
+ACCENT_POP = '#c1653a'   # terracotta contrast pop
+MAP_MIN    = '#d3d1c9'   # grey at zero on choropleth
+MAP_MAX    = '#3a6b45'   # green at max on choropleth
 
-st.markdown("""
+# ── Styling ───────────────────────────────────────────────────────────────────
+st.markdown(f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=DM+Serif+Display&display=swap');
 
-html, body, [class*="css"]  { font-family: 'DM Sans', sans-serif; }
-h1, h2, h3                  { font-family: 'DM Serif Display', serif; color: #1a2332; }
-.main                        { background-color: #f8f7f4; }
-.block-container             { padding-top: 1.5rem; padding-bottom: 2rem; }
-
-.kpi-card {
-    background: white;
+html, body, [class*="css"]  {{
+    font-family: 'DM Sans', sans-serif;
+    color: {TEXT_DARK};
+}}
+h1, h2, h3 {{
+    font-family: 'DM Serif Display', serif;
+    color: {TEXT_DARK};
+}}
+.main, .block-container {{
+    background-color: {BG};
+}}
+.block-container {{
+    padding-top: 1.5rem;
+    padding-bottom: 2rem;
+    max-width: 1400px;
+}}
+[data-testid="stSidebar"] {{
+    background-color: {BG_SIDEBAR} !important;
+    border-right: 1px solid {BORDER};
+}}
+[data-testid="stSidebar"] * {{
+    color: {TEXT_DARK} !important;
+}}
+[data-testid="stTabs"] button {{
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: {TEXT_MID};
+    background: transparent;
+    border: none;
+}}
+[data-testid="stTabs"] button[aria-selected="true"] {{
+    color: {ACCENT};
+    border-bottom: 2px solid {ACCENT};
+}}
+.kpi-card {{
+    background: {BG_CARD};
     border-radius: 8px;
     padding: 1.1rem 1.4rem;
-    border-left: 4px solid #003399;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.07);
-}
-.kpi-label {
-    font-size: 0.7rem;
+    border-left: 4px solid {ACCENT};
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}}
+.kpi-label {{
+    font-size: 0.68rem;
     font-weight: 600;
     letter-spacing: 0.09em;
     text-transform: uppercase;
-    color: #6b7280;
+    color: {TEXT_LIGHT};
     margin-bottom: 0.2rem;
-}
-.kpi-value {
+}}
+.kpi-value {{
     font-size: 1.6rem;
     font-weight: 500;
-    color: #1a2332;
+    color: {TEXT_DARK};
     line-height: 1.2;
-}
-.kpi-sub {
+}}
+.kpi-sub {{
     font-size: 0.75rem;
-    color: #9ca3af;
+    color: {TEXT_LIGHT};
     margin-top: 0.2rem;
-}
-.section-label {
+}}
+.section-label {{
     font-size: 0.68rem;
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: #9ca3af;
+    color: {TEXT_LIGHT};
     margin-bottom: 0.4rem;
-}
-.drill-header {
+}}
+.drill-header {{
     font-family: 'DM Serif Display', serif;
-    font-size: 1.1rem;
-    color: #1a2332;
-    margin-bottom: 0.25rem;
-}
-.drill-sub {
+    font-size: 1.15rem;
+    color: {TEXT_DARK};
+    margin-bottom: 0.2rem;
+}}
+.drill-sub {{
     font-size: 0.8rem;
-    color: #6b7280;
-    margin-bottom: 1rem;
-}
+    color: {TEXT_MID};
+    margin-bottom: 0.75rem;
+}}
+[data-testid="stDataFrame"] {{
+    border-radius: 6px;
+    overflow: hidden;
+}}
 </style>
 """, unsafe_allow_html=True)
 
 
 # ── Constants ─────────────────────────────────────────────────────────────────
-# BASE_PRICE is the certificate price used in the calculations notebook.
-# All cost columns in the DB are based on this price.
-# The sidebar slider rescales costs proportionally at runtime.
-
 BASE_PRICE = 75.36
 
-# Sector color palette — consistent across all charts in this dashboard.
 SECTOR_COLORS = {
-    'Iron and Steel' : '#1d3557',
-    'Aluminium'      : '#457b9d',
-    'Cement'         : '#e9c46a',
-    'Fertilizers'    : '#2a9d8f',
-    'Hydrogen'       : '#e76f51',
-    'Electricity'    : '#a8dadc',
+    'Iron and Steel' : '#5c6b5e',   # muted charcoal green-grey
+    'Aluminium'      : '#74b583',   # sage green mid
+    'Cement'         : '#c1653a',   # terracotta pop
+    'Fertilizers'    : '#3a6b45',   # sage green dark
+    'Hydrogen'       : '#a8b5aa',   # light grey-green
+    'Electricity'    : '#d3d1c9',   # near-border grey
 }
 
 
 # ── Database connection ───────────────────────────────────────────────────────
-# Cached at resource level so the connection persists across reruns.
-
 @st.cache_resource
 def get_connection():
-    """Return a persistent cached SQLite connection."""
     db_path = Path(__file__).parent.parent.parent / 'db' / 'cbam.db'
     assert db_path.exists(), (
         f'Database not found at {db_path.resolve()}. '
@@ -127,9 +161,6 @@ con = get_connection()
 
 
 # ── Data loading ──────────────────────────────────────────────────────────────
-# All queries cached with st.cache_data. Streamlit reruns on every interaction
-# so caching prevents redundant DB reads.
-
 @st.cache_data
 def load_country_data():
     """Country-level aggregated costs joined with iso3 from crosswalk."""
@@ -156,33 +187,14 @@ def load_country_data():
     """, con)
 
 @st.cache_data
-def load_sector_totals():
-    """Global sector-level aggregated costs. One row per sector."""
-    return pd.read_sql("""
-        SELECT
-            sector,
-            n_countries,
-            total_import_tonnes,
-            total_cbam_cost_high_route  AS cost_high,
-            total_cbam_cost_low_route   AS cost_low,
-            pct_of_total_high
-        FROM cbam_cost_by_sector
-        ORDER BY cost_high DESC
-    """, con)
-
-@st.cache_data
 def load_granular_data():
-    """Granular country x sector x CN code data. Source for all drill-downs."""
+    """Granular country x sector x CN code data."""
     return pd.read_sql("""
         SELECT
-            country,
-            sector,
-            cn_code,
-            production_route_high,
-            production_route_low,
+            country, sector, cn_code,
+            production_route_high, production_route_low,
             has_route_variation,
-            import_tonnes,
-            import_value_eur,
+            import_tonnes, import_value_eur,
             default_2026_high_route,
             default_2026_low_route,
             embedded_co2_high_route  AS co2_high,
@@ -193,22 +205,16 @@ def load_granular_data():
     """, con)
 
 df_countries = load_country_data()
-df_sectors   = load_sector_totals()
 df_granular  = load_granular_data()
+ALL_SECTORS  = sorted(df_granular['sector'].unique().tolist())
 
-ALL_SECTORS = sorted(df_granular['sector'].unique().tolist())
 
-
-# ── Session state initialisation ──────────────────────────────────────────────
-# selected_country persists across reruns and is updated by both the sidebar
-# selectbox and map click events.
-
+# ── Session state ─────────────────────────────────────────────────────────────
 if 'selected_country' not in st.session_state:
     st.session_state['selected_country'] = None
 
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
-
 with st.sidebar:
     st.markdown("## CBAM Exposure")
     st.markdown(
@@ -217,8 +223,7 @@ with st.sidebar:
     )
     st.divider()
 
-    # Certificate price slider
-    st.markdown('<p class="section-label">Certificate Price (€/tCO₂)</p>',
+    st.markdown(f'<p class="section-label">Certificate Price (€/tCO₂)</p>',
                 unsafe_allow_html=True)
     cert_price = st.slider(
         label            = '_cert',
@@ -230,10 +235,8 @@ with st.sidebar:
         label_visibility = 'collapsed',
     )
     st.caption(f'Default: €{BASE_PRICE} — first official EC CBAM price, April 2026')
-
     st.divider()
 
-    # Sector multiselect
     st.markdown('<p class="section-label">Sectors</p>', unsafe_allow_html=True)
     selected_sectors = st.multiselect(
         label            = '_sectors',
@@ -243,32 +246,27 @@ with st.sidebar:
     )
     if not selected_sectors:
         selected_sectors = ALL_SECTORS
-
     st.divider()
 
-    # Country selector (coordinates with map click)
     st.markdown('<p class="section-label">Country</p>', unsafe_allow_html=True)
     country_options = ['All countries'] + sorted(df_countries['country'].tolist())
+    current_idx     = 0
+    if st.session_state['selected_country'] in country_options:
+        current_idx = country_options.index(st.session_state['selected_country'])
+
     sidebar_country = st.selectbox(
         label            = '_country',
         options          = country_options,
-        index            = 0 if st.session_state['selected_country'] is None
-                           else country_options.index(
-                               st.session_state['selected_country']
-                           ) if st.session_state['selected_country'] in country_options
-                           else 0,
+        index            = current_idx,
         label_visibility = 'collapsed',
     )
-    # Sync sidebar selection to session state
     st.session_state['selected_country'] = (
         None if sidebar_country == 'All countries' else sidebar_country
     )
-
-    if st.session_state['selected_country'] is not None:
+    if st.session_state['selected_country']:
         if st.button('✕  Clear selection', use_container_width=True):
             st.session_state['selected_country'] = None
             st.rerun()
-
     st.divider()
     st.caption(
         "Sources: EU Commission · Eurostat COMEXT · "
@@ -276,104 +274,81 @@ with st.sidebar:
     )
 
 
-# ── Derived data: apply filters and rescale to slider price ───────────────────
-# Filter by selected sectors and rescale all cost columns proportionally.
-# This keeps the slider responsive without rerunning DB queries.
-
+# ── Derived data ──────────────────────────────────────────────────────────────
 price_ratio = cert_price / BASE_PRICE
 
 df_g = df_granular[df_granular['sector'].isin(selected_sectors)].copy()
 df_g['cost_high'] = df_g['cost_high'] * price_ratio
 df_g['cost_low']  = df_g['cost_low']  * price_ratio
 
-# Re-aggregate country totals from filtered granular data
 df_c = (
     df_g.groupby('country', as_index=False)
     .agg(
-        cost_high             = ('cost_high', 'sum'),
-        cost_low              = ('cost_low',  'sum'),
-        import_tonnes         = ('import_tonnes', 'sum'),
-        import_value_eur      = ('import_value_eur', 'sum'),
+        cost_high               = ('cost_high',           'sum'),
+        cost_low                = ('cost_low',            'sum'),
+        import_tonnes           = ('import_tonnes',       'sum'),
+        import_value_eur        = ('import_value_eur',    'sum'),
         has_any_route_variation = ('has_route_variation', 'any'),
     )
     .sort_values('cost_high', ascending=False)
     .reset_index(drop=True)
 )
 
-# Merge iso3 back in for map
 df_c = df_c.merge(
-    df_countries[['country', 'iso3', 'cost_pct_export_high']],
+    df_countries[['country', 'iso3']],
     on='country', how='left'
 )
 
-# Recalculate cost as pct of export value with current price
 df_c['cost_pct_export'] = (
     df_c['cost_high'] / df_c['import_value_eur'].replace(0, float('nan')) * 100
 ).round(2)
 
-# Global headline numbers
 total_cost_high  = df_c['cost_high'].sum()
 total_cost_low   = df_c['cost_low'].sum()
-total_co2        = (df_granular[df_granular['sector'].isin(selected_sectors)]['co2_high'] * price_ratio).sum()
+total_co2        = (df_g['co2_high']).sum()
 n_exposed        = (df_c['cost_high'] > 0).sum()
 top_country      = df_c.iloc[0]['country'] if len(df_c) > 0 else 'N/A'
 top_country_cost = df_c.iloc[0]['cost_high'] if len(df_c) > 0 else 0
 
 
-# ── Tab layout ────────────────────────────────────────────────────────────────
-
+# ── Tabs ──────────────────────────────────────────────────────────────────────
 tab1, tab2 = st.tabs(['🌍  CBAM Cost Exposure', '⚡  Grid Decarbonization'])
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# TAB 1 — CBAM COST EXPOSURE
+# TAB 1
 # ════════════════════════════════════════════════════════════════════════════
-
 with tab1:
 
     # ── KPI cards ─────────────────────────────────────────────────────────────
     k1, k2, k3, k4 = st.columns(4)
+    for col, label, value, sub in [
+        (k1, 'Total CBAM Bill (High Route)', f'€{total_cost_high/1e9:.2f}B',
+             f'Low route: €{total_cost_low/1e9:.2f}B'),
+        (k2, 'Embedded CO₂', f'{total_co2/1e6:.1f} MtCO₂',
+             'Across all CBAM-covered imports'),
+        (k3, 'Countries with Exposure', str(n_exposed),
+             'of 119 countries with CBAM defaults'),
+        (k4, 'Highest Single Country Bill', f'€{top_country_cost/1e9:.2f}B',
+             top_country),
+    ]:
+        with col:
+            st.markdown(
+                f'<div class="kpi-card">'
+                f'<div class="kpi-label">{label}</div>'
+                f'<div class="kpi-value">{value}</div>'
+                f'<div class="kpi-sub">{sub}</div>'
+                f'</div>',
+                unsafe_allow_html=True
+            )
 
-    with k1:
-        st.markdown(f"""
-        <div class="kpi-card">
-            <div class="kpi-label">Total CBAM Bill (High Route)</div>
-            <div class="kpi-value">€{total_cost_high/1e9:.2f}B</div>
-            <div class="kpi-sub">Low route: €{total_cost_low/1e9:.2f}B</div>
-        </div>""", unsafe_allow_html=True)
-
-    with k2:
-        st.markdown(f"""
-        <div class="kpi-card">
-            <div class="kpi-label">Embedded CO₂</div>
-            <div class="kpi-value">{total_co2/1e6:.1f} MtCO₂</div>
-            <div class="kpi-sub">Across all CBAM-covered imports</div>
-        </div>""", unsafe_allow_html=True)
-
-    with k3:
-        st.markdown(f"""
-        <div class="kpi-card">
-            <div class="kpi-label">Countries with Exposure</div>
-            <div class="kpi-value">{n_exposed}</div>
-            <div class="kpi-sub">of 119 countries with CBAM defaults</div>
-        </div>""", unsafe_allow_html=True)
-
-    with k4:
-        st.markdown(f"""
-        <div class="kpi-card">
-            <div class="kpi-label">Highest Single Country Bill</div>
-            <div class="kpi-value">€{top_country_cost/1e9:.2f}B</div>
-            <div class="kpi-sub">{top_country}</div>
-        </div>""", unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown('<br>', unsafe_allow_html=True)
 
     # ── Choropleth map ────────────────────────────────────────────────────────
-    # Countries shaded by CBAM cost as % of export value, log scale.
-    # Clicking a country updates session state and filters all other charts.
-
-    st.markdown('<p class="section-label">CBAM Cost as Share of Export Value — click a country to filter</p>',
-                unsafe_allow_html=True)
+    st.markdown(
+        '<p class="section-label">CBAM Cost as Share of Export Value — click a country to filter</p>',
+        unsafe_allow_html=True
+    )
 
     df_map = df_c[df_c['cost_pct_export'].notna() & (df_c['cost_pct_export'] > 0)].copy()
 
@@ -389,62 +364,64 @@ with tab1:
             'import_tonnes'   : ':,.0f',
         },
         color_continuous_scale = [
-            [0.0,  '#dbeafe'],
-            [0.25, '#93c5fd'],
-            [0.5,  '#3b82f6'],
-            [0.75, '#1d4ed8'],
-            [1.0,  '#1e3a8a'],
+            [0.0,  MAP_MIN],
+            [0.2,  '#bdc4bc'],
+            [0.4,  '#a0b6a4'],
+            [0.6,  '#7a9e86'],
+            [0.8,  '#52815d'],
+            [1.0,  MAP_MAX],
         ],
-        range_color        = [
+        range_color = [
             df_map['cost_pct_export'].quantile(0.05),
             df_map['cost_pct_export'].quantile(0.95),
         ],
-        labels             = {
+        labels = {
             'cost_high'       : 'CBAM Cost (€)',
             'cost_pct_export' : 'Cost as % of exports',
             'import_tonnes'   : 'Import volume (t)',
         },
     )
 
+    if st.session_state['selected_country']:
+        sel_iso3 = df_countries.loc[
+            df_countries['country'] == st.session_state['selected_country'], 'iso3'
+        ].values
+        if len(sel_iso3) > 0:
+            fig_map.add_trace(go.Choropleth(
+                locations         = [sel_iso3[0]],
+                z                 = [1],
+                colorscale        = [[0, 'rgba(0,0,0,0)'], [1, 'rgba(0,0,0,0)']],
+                showscale         = False,
+                marker_line_color = ACCENT_POP,
+                marker_line_width = 2.5,
+            ))
+
     fig_map.update_layout(
         geo = dict(
-            showframe      = False,
-            showcoastlines = True,
-            coastlinecolor = '#e5e7eb',
-            showland       = True,
-            landcolor      = '#f3f4f6',
-            showocean      = True,
-            oceancolor     = '#f8f7f4',
-            bgcolor        = '#f8f7f4',
+            showframe       = False,
+            showcoastlines  = True,
+            coastlinecolor  = BORDER,
+            showland        = True,
+            landcolor       = '#eae8e2',
+            showocean       = True,
+            oceancolor      = BG,
+            bgcolor         = BG,
             projection_type = 'natural earth',
         ),
         coloraxis_colorbar = dict(
             title      = '% of exports',
-            thickness  = 12,
-            len        = 0.6,
-            tickfont   = dict(size=10),
-            title_font = dict(size=10),
-),
-        margin     = dict(l=0, r=0, t=0, b=0),
-        paper_bgcolor = '#f8f7f4',
-        plot_bgcolor  = '#f8f7f4',
-        height     = 380,
+            thickness  = 10,
+            len        = 0.5,
+            x          = 1.0,
+            xanchor    = 'left',
+            tickfont   = dict(size=9, color=TEXT_MID),
+            title_font = dict(size=9, color=TEXT_MID),
+        ),
+        margin        = dict(l=0, r=60, t=0, b=0),
+        paper_bgcolor = BG,
+        plot_bgcolor  = BG,
+        height        = 360,
     )
-
-    # Highlight selected country if one is active
-    if st.session_state['selected_country']:
-        selected_iso3 = df_countries.loc[
-            df_countries['country'] == st.session_state['selected_country'], 'iso3'
-        ].values
-        if len(selected_iso3) > 0:
-            fig_map.add_trace(go.Choropleth(
-                locations       = [selected_iso3[0]],
-                z               = [1],
-                colorscale      = [[0, 'rgba(0,0,0,0)'], [1, 'rgba(0,0,0,0)']],
-                showscale       = False,
-                marker_line_color = '#003399',
-                marker_line_width = 2.5,
-            ))
 
     map_event = st.plotly_chart(
         fig_map,
@@ -453,8 +430,8 @@ with tab1:
         key                 = 'map_chart',
     )
 
-    # Handle map click: update selected_country from click event
-    if map_event and map_event.get('selection') and map_event['selection'].get('points'):
+    if (map_event and map_event.get('selection')
+            and map_event['selection'].get('points')):
         clicked_iso3 = map_event['selection']['points'][0].get('location')
         if clicked_iso3:
             match = df_countries[df_countries['iso3'] == clicked_iso3]
@@ -464,18 +441,16 @@ with tab1:
                     st.session_state['selected_country'] = clicked_name
                     st.rerun()
 
-    # ── Bar chart + drill-down panel ──────────────────────────────────────────
+    # ── Bar chart + drill-down ────────────────────────────────────────────────
     col_bar, col_drill = st.columns([3, 2], gap='large')
 
-    # ── Bar chart ─────────────────────────────────────────────────────────────
     with col_bar:
-        st.markdown('<p class="section-label">Top 10 Countries by Estimated CBAM Cost</p>',
-                    unsafe_allow_html=True)
+        st.markdown(
+            '<p class="section-label">Top 10 Countries by Estimated CBAM Cost</p>',
+            unsafe_allow_html=True
+        )
 
-        # Build top 10 from filtered + rescaled data
         df_top10 = df_c.head(10).copy()
-
-        # Get sector breakdown for each top-10 country
         df_top10_sectors = (
             df_g[df_g['country'].isin(df_top10['country'])]
             .groupby(['country', 'sector'], as_index=False)['cost_high']
@@ -484,76 +459,65 @@ with tab1:
 
         fig_bar = go.Figure()
 
-        # Outer bars: stacked by sector (high route)
         for sector in ALL_SECTORS:
             if sector not in selected_sectors:
                 continue
             df_s = df_top10_sectors[df_top10_sectors['sector'] == sector]
-            # Align to top10 order
             vals = []
             for country in df_top10['country']:
                 row = df_s[df_s['country'] == country]
                 vals.append(row['cost_high'].values[0] if len(row) > 0 else 0)
 
             fig_bar.add_trace(go.Bar(
-                name        = sector,
-                y           = df_top10['country'].tolist(),
-                x           = vals,
-                orientation = 'h',
-                marker_color = SECTOR_COLORS.get(sector, '#cccccc'),
+                name          = sector,
+                y             = df_top10['country'].tolist(),
+                x             = vals,
+                orientation   = 'h',
+                marker_color  = SECTOR_COLORS.get(sector, '#d3d1c9'),
                 hovertemplate = f'<b>%{{y}}</b><br>{sector}: €%{{x:,.0f}}<extra></extra>',
             ))
 
-        # Inner bar: low route total (only where route variation exists)
-        df_top10_varied = df_top10[df_top10['has_any_route_variation']]
-        if len(df_top10_varied) > 0:
+        df_varied = df_top10[df_top10['has_any_route_variation']]
+        if len(df_varied) > 0:
             fig_bar.add_trace(go.Bar(
-                name         = 'Low route (best case)',
-                y            = df_top10_varied['country'].tolist(),
-                x            = df_top10_varied['cost_low'].tolist(),
-                orientation  = 'h',
-                marker_color = 'rgba(255,255,255,0.35)',
-                marker_line_color = 'rgba(255,255,255,0.7)',
+                name          = 'Low route (best case)',
+                y             = df_varied['country'].tolist(),
+                x             = df_varied['cost_low'].tolist(),
+                orientation   = 'h',
+                marker_color  = 'rgba(255,255,255,0.3)',
+                marker_line_color = 'rgba(255,255,255,0.5)',
                 marker_line_width = 1,
-                showlegend   = True,
                 hovertemplate = '<b>%{y}</b><br>Low route: €%{x:,.0f}<extra></extra>',
             ))
-
-        # Highlight selected country
-        if st.session_state['selected_country'] and \
-           st.session_state['selected_country'] in df_top10['country'].values:
-            fig_bar.add_hline(
-                y             = st.session_state['selected_country'],
-                line_color    = '#003399',
-                line_width    = 2,
-                line_dash     = 'dot',
-            )
 
         fig_bar.update_layout(
             barmode       = 'stack',
             yaxis         = dict(
-                autorange     = 'reversed',
-                tickfont      = dict(size=11, family='DM Sans'),
-                gridcolor     = '#f3f4f6',
+                autorange  = 'reversed',
+                tickfont   = dict(size=11, family='DM Sans', color=TEXT_DARK),
+                gridcolor  = BORDER,
+                automargin = True,
             ),
             xaxis         = dict(
-                title         = 'Estimated CBAM Cost (€)',
-                tickfont      = dict(size=10),
-                gridcolor     = '#e5e7eb',
-                tickformat    = ',.0f',
+                title      = 'Estimated CBAM Cost (€)',
+                tickfont   = dict(size=9, color=TEXT_MID),
+                gridcolor  = BORDER,
+                tickformat = ',.0f',
+                title_font = dict(size=10, color=TEXT_MID),
             ),
             legend        = dict(
-                orientation   = 'h',
-                yanchor       = 'bottom',
-                y             = -0.25,
-                xanchor       = 'left',
-                x             = 0,
-                font          = dict(size=10),
+                orientation = 'h',
+                yanchor     = 'top',
+                y           = -0.18,
+                xanchor     = 'left',
+                x           = 0,
+                font        = dict(size=9, color=TEXT_MID),
+                bgcolor     = 'rgba(0,0,0,0)',
             ),
-            paper_bgcolor = '#f8f7f4',
-            plot_bgcolor  = '#f8f7f4',
-            margin        = dict(l=0, r=10, t=10, b=10),
-            height        = 420,
+            paper_bgcolor = BG,
+            plot_bgcolor  = BG,
+            margin        = dict(l=10, r=10, t=10, b=80),
+            height        = 440,
         )
 
         st.plotly_chart(fig_bar, use_container_width=True, key='bar_chart')
@@ -565,118 +529,120 @@ with tab1:
         if selected:
             st.markdown(f'<p class="drill-header">{selected}</p>',
                         unsafe_allow_html=True)
+            row = df_c[df_c['country'] == selected]
+            if len(row) > 0:
+                r = row.iloc[0]
+                st.markdown(
+                    f'<p class="drill-sub">'
+                    f'Est. bill: €{r["cost_high"]/1e6:.1f}M &nbsp;·&nbsp; '
+                    f'{r["cost_pct_export"]:.1f}% of export value'
+                    f'</p>',
+                    unsafe_allow_html=True
+                )
 
             df_drill = df_g[df_g['country'] == selected].copy()
-            df_drill_sector = (
+            df_ds = (
                 df_drill.groupby('sector', as_index=False)
                 .agg(cost_high=('cost_high','sum'), cost_low=('cost_low','sum'))
                 .sort_values('cost_high', ascending=False)
             )
-            df_drill_sector['has_variation'] = (
-                df_drill_sector['cost_high'] != df_drill_sector['cost_low']
-            )
+            df_ds['has_variation'] = df_ds['cost_high'] != df_ds['cost_low']
 
-            # Left chart: sector cost breakdown donut
             st.markdown('<p class="section-label">Cost by sector</p>',
                         unsafe_allow_html=True)
             fig_donut = go.Figure(go.Pie(
-                labels       = df_drill_sector['sector'],
-                values       = df_drill_sector['cost_high'],
-                hole         = 0.55,
-                marker_colors = [
-                    SECTOR_COLORS.get(s, '#cccccc')
-                    for s in df_drill_sector['sector']
-                ],
-                textinfo     = 'percent',
+                labels        = df_ds['sector'],
+                values        = df_ds['cost_high'],
+                hole          = 0.55,
+                marker_colors = [SECTOR_COLORS.get(s, '#d3d1c9') for s in df_ds['sector']],
+                textinfo      = 'percent',
+                textfont      = dict(size=10),
                 hovertemplate = '<b>%{label}</b><br>€%{value:,.0f}<br>%{percent}<extra></extra>',
             ))
             fig_donut.update_layout(
                 showlegend    = True,
-                legend        = dict(font=dict(size=10), orientation='v'),
-                margin        = dict(l=0, r=0, t=10, b=0),
-                paper_bgcolor = '#f8f7f4',
-                height        = 180,
+                legend        = dict(font=dict(size=9, color=TEXT_MID),
+                                     orientation='v', x=1.0),
+                margin        = dict(l=0, r=80, t=10, b=0),
+                paper_bgcolor = BG,
+                height        = 190,
             )
             st.plotly_chart(fig_donut, use_container_width=True, key='donut_chart')
 
-            # Right chart: high vs low route by sector (only sectors with variation)
-            df_varied = df_drill_sector[df_drill_sector['has_variation']]
-            if len(df_varied) > 0:
-                st.markdown('<p class="section-label">Route variation by sector</p>',
+            df_varied_drill = df_ds[df_ds['has_variation']]
+            if len(df_varied_drill) > 0:
+                st.markdown('<p class="section-label">High vs low route by sector</p>',
                             unsafe_allow_html=True)
                 fig_range = go.Figure()
                 fig_range.add_trace(go.Bar(
-                    name         = 'High route',
-                    x            = df_varied['sector'],
-                    y            = df_varied['cost_high'],
-                    marker_color = '#1d3557',
+                    name          = 'High route',
+                    x             = df_varied_drill['sector'],
+                    y             = df_varied_drill['cost_high'],
+                    marker_color  = '#5c6b5e',
                     hovertemplate = '%{x}<br>High: €%{y:,.0f}<extra></extra>',
                 ))
                 fig_range.add_trace(go.Bar(
-                    name         = 'Low route',
-                    x            = df_varied['sector'],
-                    y            = df_varied['cost_low'],
-                    marker_color = '#a8dadc',
+                    name          = 'Low route',
+                    x             = df_varied_drill['sector'],
+                    y             = df_varied_drill['cost_low'],
+                    marker_color  = '#a8b5aa',
                     hovertemplate = '%{x}<br>Low: €%{y:,.0f}<extra></extra>',
                 ))
                 fig_range.update_layout(
                     barmode       = 'group',
-                    xaxis         = dict(tickfont=dict(size=9)),
-                    yaxis         = dict(
-                        tickformat = ',.0f',
-                        tickfont   = dict(size=9),
-                        gridcolor  = '#e5e7eb',
-                    ),
-                    legend        = dict(font=dict(size=9), orientation='h',
-                                        y=-0.3),
-                    paper_bgcolor = '#f8f7f4',
-                    plot_bgcolor  = '#f8f7f4',
-                    margin        = dict(l=0, r=0, t=10, b=0),
-                    height        = 180,
+                    xaxis         = dict(tickfont=dict(size=9, color=TEXT_MID)),
+                    yaxis         = dict(tickformat=',.0f',
+                                        tickfont=dict(size=9, color=TEXT_MID),
+                                        gridcolor=BORDER),
+                    legend        = dict(font=dict(size=9, color=TEXT_MID),
+                                        orientation='h', y=-0.3,
+                                        bgcolor='rgba(0,0,0,0)'),
+                    paper_bgcolor = BG,
+                    plot_bgcolor  = BG,
+                    margin        = dict(l=0, r=0, t=10, b=60),
+                    height        = 200,
                 )
                 st.plotly_chart(fig_range, use_container_width=True,
                                 key='range_chart')
             else:
-                st.caption('No route variation for this country — '
-                           'only one production route published per product.')
+                st.caption(
+                    'No route variation for this country — '
+                    'single production route published per product.'
+                )
 
         else:
-            # Global view when no country selected
             st.markdown('<p class="drill-header">Global Overview</p>',
                         unsafe_allow_html=True)
-            st.markdown('<p class="drill-sub">Select a country on the map or '
-                        'bar chart to drill down.</p>',
-                        unsafe_allow_html=True)
+            st.markdown(
+                '<p class="drill-sub">Select a country on the map or bar chart to drill down.</p>',
+                unsafe_allow_html=True
+            )
 
-            # Sector share donut — global
             st.markdown('<p class="section-label">Global cost by sector</p>',
                         unsafe_allow_html=True)
-            df_sec_filtered = (
+            df_sec = (
                 df_g.groupby('sector', as_index=False)['cost_high'].sum()
                 .sort_values('cost_high', ascending=False)
             )
-            fig_global_donut = go.Figure(go.Pie(
-                labels        = df_sec_filtered['sector'],
-                values        = df_sec_filtered['cost_high'],
+            fig_gd = go.Figure(go.Pie(
+                labels        = df_sec['sector'],
+                values        = df_sec['cost_high'],
                 hole          = 0.55,
-                marker_colors = [
-                    SECTOR_COLORS.get(s, '#cccccc')
-                    for s in df_sec_filtered['sector']
-                ],
+                marker_colors = [SECTOR_COLORS.get(s, '#d3d1c9') for s in df_sec['sector']],
                 textinfo      = 'percent',
+                textfont      = dict(size=10),
                 hovertemplate = '<b>%{label}</b><br>€%{value:,.0f}<br>%{percent}<extra></extra>',
             ))
-            fig_global_donut.update_layout(
+            fig_gd.update_layout(
                 showlegend    = True,
-                legend        = dict(font=dict(size=10)),
-                margin        = dict(l=0, r=0, t=10, b=0),
-                paper_bgcolor = '#f8f7f4',
+                legend        = dict(font=dict(size=9, color=TEXT_MID),
+                                     orientation='v', x=1.0),
+                margin        = dict(l=0, r=80, t=10, b=0),
+                paper_bgcolor = BG,
                 height        = 200,
             )
-            st.plotly_chart(fig_global_donut, use_container_width=True,
-                            key='global_donut')
+            st.plotly_chart(fig_gd, use_container_width=True, key='global_donut')
 
-            # Top 5 summary table
             st.markdown('<p class="section-label">Top 5 countries</p>',
                         unsafe_allow_html=True)
             df_top5 = df_c.head(5)[['country', 'cost_high']].copy()
@@ -690,13 +656,13 @@ with tab1:
 # ════════════════════════════════════════════════════════════════════════════
 # TAB 2 — GRID DECARBONIZATION POTENTIAL (placeholder)
 # ════════════════════════════════════════════════════════════════════════════
-
 with tab2:
     st.markdown("### Grid Decarbonization Potential")
     st.markdown(
-        "This tab will show the BF-BOF vs. EAF scenario chart and grid "
-        "electricity mix analysis. Coming in the next build."
+        "This tab will show the BF-BOF vs. EAF scenario chart, "
+        "grid generation mix, and CO₂ intensity trend for a selected country."
     )
+    st.markdown("<br>", unsafe_allow_html=True)
 
     col_a, col_b, col_c = st.columns(3)
     for col, label in zip(
@@ -705,15 +671,15 @@ with tab2:
     ):
         with col:
             st.markdown(
-                f'<div style="background:#f3f4f6;border-radius:8px;padding:3rem 1rem;'
-                f'text-align:center;color:#9ca3af;font-size:0.85rem;">'
+                f'<div style="background:{BG_CARD};border-radius:8px;padding:3rem 1rem;'
+                f'text-align:center;color:{TEXT_LIGHT};font-size:0.85rem;'
+                f'border:1px solid {BORDER};">'
                 f'📊<br><br>{label}<br><br><em>Coming soon</em></div>',
                 unsafe_allow_html=True
             )
-
     st.markdown("<br>", unsafe_allow_html=True)
     st.caption(
-        "Tab 2 requires: electricity consumption per tonne by route (kWh/t), "
+        "Requires: electricity consumption per tonne by route (kWh/t), "
         "grid CO₂ intensity from Ember, and steel production route mix from Worldsteel. "
         "All data is available in the database."
     )
