@@ -184,12 +184,12 @@ h1, h2, h3 {{
 
 /* Clear button */
 [data-testid="stButton"] button {{
-    font-size: 0.72rem !important;
-    padding: 2px 8px !important;
-    height: 24px !important;
+    font-size: 0.40rem !important;
+    padding: 2px 2px !important;
+    height: 8px !important;
     float: right;
     background: transparent !important;
-    border: 1px solid {BORDER} !important;
+    border: 0.5px solid {BORDER} !important;
     color: {TEXT_MID} !important;
     border-radius: 4px !important;
 }}
@@ -415,8 +415,36 @@ with k2:
         unsafe_allow_html=True
     )
 
-# Card 3: country-specific CBAM cost, or global EU imports
+# Card 3: % of exports
 with k3:
+    if selected and sel_pct is not None and pd.notna(sel_pct):
+        total_exp_str = (
+            f'Total exports: €{sel_total_exports/1e9:.2f}B'
+            if sel_total_exports and pd.notna(sel_total_exports)
+            else 'Total export data unavailable'
+        )
+        st.markdown(
+            f'<div class="kpi-card-country">'
+            f'<div class="kpi-label">CBAM Cost as % of Exports — {selected}</div>'
+            f'<div class="kpi-value">{sel_pct:.1f}%</div>'
+            f'<div class="kpi-sub">'
+            f'EU imports: €{sel_eu_imports/1e6:.1f}M · {total_exp_str}'
+            f'</div>'
+            f'</div>',
+            unsafe_allow_html=True
+        )
+    else:
+        st.markdown(
+            f'<div class="kpi-card">'
+            f'<div class="kpi-label">Total EU Imports (CBAM Sectors)</div>'
+            f'<div class="kpi-value">€{total_eu_imports/1e9:.2f}B</div>'
+            f'<div class="kpi-sub">{n_exposed} countries with non-zero exposure</div>'
+            f'</div>',
+            unsafe_allow_html=True
+        )
+
+# Card 4: country-specific CBAM cost
+with k4:
     if selected and sel_cost is not None:
         st.markdown(
             f'<div class="kpi-card-country">'
@@ -429,33 +457,7 @@ with k3:
     else:
         st.markdown(
             f'<div class="kpi-card">'
-            f'<div class="kpi-label">Total EU Imports (CBAM sectors)</div>'
-            f'<div class="kpi-value">€{total_eu_imports/1e9:.2f}B</div>'
-            f'<div class="kpi-sub">{n_exposed} countries with non-zero exposure</div>'
-            f'</div>',
-            unsafe_allow_html=True
-        )
-
-# Card 4: country-specific cost as % of exports, or formula
-with k4:
-    if selected and sel_pct is not None and pd.notna(sel_pct):
-        total_exp_str = (
-            f'Total exports: €{sel_total_exports/1e9:.2f}B'
-            if sel_total_exports and pd.notna(sel_total_exports)
-            else 'Total export data unavailable'
-        )
-        st.markdown(
-            f'<div class="kpi-card-country">'
-            f'<div class="kpi-label">CBAM Cost as % of Exports — {selected}</div>'
-            f'<div class="kpi-value">{sel_pct:.1f}%</div>'
-            f'<div class="kpi-sub">{total_exp_str}</div>'
-            f'</div>',
-            unsafe_allow_html=True
-        )
-    else:
-        st.markdown(
-            f'<div class="kpi-card">'
-            f'<div class="kpi-label">How CBAM Cost is Estimated</div>'
+            f'<div class="kpi-label">CBAM Cost per Country</div>'
             f'<div class="kpi-formula">Import volume (t)<br>'
             f'× Default emission value (tCO₂/t)<br>'
             f'× Certificate price (€/tCO₂)</div>'
@@ -467,11 +469,11 @@ st.markdown('<br>', unsafe_allow_html=True)
 
 
 # ── Map label + clear button ───────────────────────────────────────────────────
-map_label_col, clear_col = st.columns([6, 1])
+map_label_col, clear_col = st.columns([3, 2.5])
 with map_label_col:
     st.markdown(
-        '<p class="section-label">CBAM cost as share of total export value — '
-        'click a country to filter</p>',
+        '<p class="section-label">CBAM cost as share of total export value'
+        '</p>Click a country to filter</p>',
         unsafe_allow_html=True
     )
 with clear_col:
@@ -488,7 +490,7 @@ with clear_col:
 
 
 # ── Two-column layout: map left, charts right ─────────────────────────────────
-col_map, col_charts = st.columns([3, 2], gap='large')
+col_map, col_charts = st.columns([7, 2], gap='large')
 
 with col_map:
 
@@ -589,131 +591,45 @@ with col_map:
                         st.session_state['selected_country'] = clicked_name
                         st.rerun()
 
-
-with col_charts:
-
-    if selected:
-        # Country name and summary
-        row = df_c[df_c['country'] == selected]
-        if len(row) > 0:
-            r = row.iloc[0]
-            pct_str = (
-                f'{r["cost_pct_export"]:.1f}% of export value'
-                if pd.notna(r.get('cost_pct_export')) else ''
-            )
-            st.markdown(
-                f'<p class="drill-header">{selected}</p>',
-                unsafe_allow_html=True
-            )
-            st.markdown(
-                f'<p class="drill-sub">'
-                f'Est. CBAM bill: €{r["cost_high"]/1e6:.1f}M'
-                f'{" · " + pct_str if pct_str else ""}'
-                f'</p>',
-                unsafe_allow_html=True
-            )
-
-        # Sector cost donut
-        st.markdown('<p class="section-label">Cost by sector</p>',
-                    unsafe_allow_html=True)
-        df_drill = df_g[df_g['country'] == selected]
-        df_ds = (
-            df_drill.groupby('sector', as_index=False)['cost_high'].sum()
-            .sort_values('cost_high', ascending=False)
-        )
-        fig_donut = go.Figure(go.Pie(
-            labels        = df_ds['sector'],
-            values        = df_ds['cost_high'],
-            hole          = 0.55,
-            marker_colors = [SECTOR_COLORS.get(s, '#d3d1c9') for s in df_ds['sector']],
-            textinfo      = 'percent',
-            textfont      = dict(size=10),
-            hovertemplate = '<b>%{label}</b><br>€%{value:,.0f}<br>%{percent}<extra></extra>',
-        ))
-        fig_donut.update_layout(
-            showlegend    = True,
-            legend        = dict(font=dict(size=9, color=TEXT_MID),
-                                 orientation='v', x=1.0),
-            margin        = dict(l=0, r=90, t=10, b=0),
-            paper_bgcolor = BG,
-            height        = 200,
-        )
-        st.plotly_chart(fig_donut, use_container_width=True, key='donut_chart')
-
-    else:
-        # Global sector donut
-        st.markdown('<p class="section-label">Global cost by sector</p>',
-                    unsafe_allow_html=True)
-        df_sec = (
-            df_g.groupby('sector', as_index=False)['cost_high'].sum()
-            .sort_values('cost_high', ascending=False)
-        )
-        fig_gd = go.Figure(go.Pie(
-            labels        = df_sec['sector'],
-            values        = df_sec['cost_high'],
-            hole          = 0.55,
-            marker_colors = [SECTOR_COLORS.get(s, '#d3d1c9') for s in df_sec['sector']],
-            textinfo      = 'percent',
-            textfont      = dict(size=10),
-            hovertemplate = '<b>%{label}</b><br>€%{value:,.0f}<br>%{percent}<extra></extra>',
-        ))
-        fig_gd.update_layout(
-            showlegend    = True,
-            legend        = dict(font=dict(size=9, color=TEXT_MID),
-                                 orientation='v', x=1.0),
-            margin        = dict(l=0, r=90, t=10, b=0),
-            paper_bgcolor = BG,
-            height        = 200,
-        )
-        st.plotly_chart(fig_gd, use_container_width=True, key='global_donut')
-
-    # Top 10 bar chart — always shows global top 10, highlights selected country
-    st.markdown(
-        '<p class="section-label">Top 10 countries by estimated CBAM cost</p>',
-        unsafe_allow_html=True
-    )
-
-    df_top10 = df_c.head(10).copy()
-
-    fig_bar = go.Figure()
-
-    fig_bar.add_trace(go.Bar(
-        name          = 'High route cost',
-        y             = df_top10['country'].tolist(),
-        x             = df_top10['cost_high'].tolist(),
-        orientation   = 'h',
-        marker_color  = [
-            ACCENT_POP if c == selected else ACCENT
-            for c in df_top10['country']
-        ],
-        hovertemplate = '<b>%{y}</b><br>€%{x:,.0f}<extra></extra>',
-    ))
-
-    fig_bar.update_layout(
-        yaxis         = dict(
-            autorange  = 'reversed',
-            tickfont   = dict(size=10, family='DM Sans', color=TEXT_DARK),
-            gridcolor  = BORDER,
-            automargin = True,
-        ),
-        xaxis         = dict(
-            title      = 'Estimated CBAM Cost (€)',
-            tickfont   = dict(size=9, color=TEXT_MID),
-            gridcolor  = BORDER,
-            tickformat = '.2s',
-            title_font = dict(size=10, color=TEXT_MID),
-        ),
-        showlegend    = False,
-        paper_bgcolor = BG,
-        plot_bgcolor  = BG,
-        margin        = dict(l=10, r=10, t=10, b=40),
-        height        = 260,
-    )
-
-    st.plotly_chart(fig_bar, use_container_width=True, key='bar_chart')
-
     st.markdown('<br>', unsafe_allow_html=True)
     st.caption(
         'Sources: EU Commission · Eurostat COMEXT · '
         'Worldsteel · UN Comtrade · Ember'
     )
+
+
+with col_charts:
+# Sector cost donut — label switches between country and global, layout never shifts
+    donut_label = f'Cost by sector — {selected}' if selected else 'Global cost by sector'
+    st.markdown(f'<p class="section-label">{donut_label}</p>',
+                unsafe_allow_html=True)
+
+    if selected:
+        df_donut = df_g[df_g['country'] == selected]
+    else:
+        df_donut = df_g
+
+    df_ds = (
+        df_donut.groupby('sector', as_index=False)['cost_high'].sum()
+        .sort_values('cost_high', ascending=False)
+    )
+
+    fig_donut = go.Figure(go.Pie(
+        labels        = df_ds['sector'],
+        values        = df_ds['cost_high'],
+        hole          = 0.55,
+        marker_colors = [SECTOR_COLORS.get(s, '#d3d1c9') for s in df_ds['sector']],
+        textinfo      = 'percent',
+        textfont      = dict(size=10),
+        hovertemplate = '<b>%{label}</b><br>€%{value:,.0f}<br>%{percent}<extra></extra>',
+    ))
+    fig_donut.update_layout(
+        showlegend    = True,
+        legend        = dict(font=dict(size=9, color=TEXT_MID),
+                             orientation='v', x=1.0),
+        margin        = dict(l=0, r=90, t=10, b=0),
+        paper_bgcolor = BG,
+        height        = 200,
+    )
+    st.plotly_chart(fig_donut, use_container_width=True, key='donut_chart')
+    
