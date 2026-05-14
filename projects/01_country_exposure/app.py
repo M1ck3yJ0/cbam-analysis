@@ -117,6 +117,12 @@ h1, h2, h3 {{
     margin-bottom: 0.15rem;
 }}
 
+/* Compact multiselect — hide tags, show count only */
+[data-testid="stMultiSelect"] [data-baseweb="select"] > div:first-child {{
+    overflow: hidden;
+    max-height: 38px;
+}}
+
 /* KPI cards */
 .kpi-card {{
     background: {BG_CARD};
@@ -295,9 +301,16 @@ with fc2:
         options          = ALL_SECTORS,
         default          = ALL_SECTORS,
         label_visibility = 'collapsed',
+        placeholder      = 'All sectors',
+        max_selections   = len(ALL_SECTORS),
     )
     if not selected_sectors:
         selected_sectors = ALL_SECTORS
+    # Show compact summary label
+    n_sel = len(selected_sectors)
+    n_all = len(ALL_SECTORS)
+    summary = 'All sectors' if n_sel == n_all else f'{n_sel} of {n_all} sectors'
+    st.caption(summary)
 
 with fc3:
     st.markdown('<p class="filter-label">Country</p>',
@@ -519,25 +532,18 @@ with tab1:
 
         fig_bar = go.Figure()
 
-        for sector in ALL_SECTORS:
-            if sector not in selected_sectors:
-                continue
-            df_s = df_all_sectors[df_all_sectors['sector'] == sector]
-            vals = []
-            for country in df_c['country']:
-                row = df_s[df_s['country'] == country]
-                vals.append(row['cost_high'].values[0] if len(row) > 0 else 0)
+        # Single outer bar: total high-route cost per country
+        fig_bar.add_trace(go.Bar(
+            name          = 'High route cost',
+            y             = df_c['country'].tolist(),
+            x             = df_c['cost_high'].tolist(),
+            orientation   = 'h',
+            marker_color  = ACCENT,
+            hovertemplate = '<b>%{y}</b><br>High route: €%{x:,.0f}<extra></extra>',
+            showlegend    = True,
+        ))
 
-            fig_bar.add_trace(go.Bar(
-                name          = sector,
-                y             = df_c['country'].tolist(),
-                x             = vals,
-                orientation   = 'h',
-                marker_color  = SECTOR_COLORS.get(sector, '#d3d1c9'),
-                hovertemplate = f'<b>%{{y}}</b><br>{sector}: €%{{x:,.0f}}<extra></extra>',
-            ))
-
-        # Inner low-route bar where variation exists
+        # Inner low-route bar only where route variation exists
         df_varied = df_c[df_c['has_any_route_variation']]
         if len(df_varied) > 0:
             fig_bar.add_trace(go.Bar(
@@ -545,10 +551,9 @@ with tab1:
                 y             = df_varied['country'].tolist(),
                 x             = df_varied['cost_low'].tolist(),
                 orientation   = 'h',
-                marker_color  = 'rgba(255,255,255,0.28)',
-                marker_line_color = 'rgba(255,255,255,0.45)',
-                marker_line_width = 1,
+                marker_color  = ACCENT_MID,
                 hovertemplate = '<b>%{y}</b><br>Low route: €%{x:,.0f}<extra></extra>',
+                showlegend    = True,
             ))
 
         # Highlight selected country
@@ -564,7 +569,7 @@ with tab1:
                 )
 
         fig_bar.update_layout(
-            barmode       = 'stack',
+            barmode       = 'overlay',    # inner bar overlays outer, not stacked
             yaxis         = dict(
                 autorange  = 'reversed',
                 tickfont   = dict(size=10, family='DM Sans', color=TEXT_DARK),
@@ -593,9 +598,9 @@ with tab1:
             height        = bar_height,
         )
 
-        # Native Streamlit scrollable container — reliable for Plotly charts
         with st.container(height=600):
             st.plotly_chart(fig_bar, use_container_width=True, key='bar_chart')
+
 
     # ── Drill-down panel ──────────────────────────────────────────────────────
     with col_drill:
