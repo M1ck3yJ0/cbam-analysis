@@ -327,10 +327,14 @@ def load_grid_generation():
     """Latest electricity generation by fuel type."""
     # 2024 only, consistent with all other data sources.
     return pd.read_sql("""
+        -- unit = 'TWh' ensures we sum generation volumes only.
+        -- The same (country, year, fuel_type) row also exists as '%'
+        -- in the Ember source; mixing units would corrupt the totals.
         SELECT country, year, fuel_type, subcategory, value, unit
         FROM grid_generation
         WHERE year = 2024
           AND subcategory = 'Fuel'
+          AND unit = 'TWh'
     """, con)
 
 @st.cache_data
@@ -688,7 +692,7 @@ with col_map:
                 locations         = [sel_iso3[0]], z=[1],
                 colorscale        = [[0, 'rgba(0,0,0,0)'], [1, 'rgba(0,0,0,0)']],
                 showscale         = False,
-                marker_line_color = ACCENT_POP,
+                marker_line_color = '#e83b2a',
                 marker_line_width = 2.5,
                 hoverinfo         = 'skip',
             ))
@@ -701,13 +705,16 @@ with col_map:
             projection_type='natural earth',
         ),
         coloraxis_colorbar = dict(
-            title=metric_label, thickness=10, len=0.5,
-            x=1.0, xanchor='left',
+            title=metric_label, thickness=10, len=0.6,
+            orientation='h',
+            x=0.5, xanchor='center',
+            y=-0.04, yanchor='top',
             tickfont=dict(size=9, color=TEXT_MID),
             title_font=dict(size=9, color=TEXT_MID),
+            title_side='bottom',
         ),
-        margin=dict(l=0, r=60, t=0, b=0),
-        paper_bgcolor=BG, plot_bgcolor=BG, height=380,
+        margin=dict(l=0, r=0, t=10, b=50),
+        paper_bgcolor=BG, plot_bgcolor=BG, height=420,
     )
 
     map_event = st.plotly_chart(
@@ -865,117 +872,116 @@ with col_eaf:
     bof_default = get_default(bof_code, selected)
     eaf_default = get_default(eaf_code, selected)
 
-    # Grid intensity for the current scenario bar.
-    # Falls back to global avg when no 2024 data exists for the selected
-    # country. A caption below the chart explains this when it occurs.
+    # Grid intensity is required for the two verified EAF scenario bars.
+    # If no 2024 Ember intensity data exists for the selected country,
+    # replace the entire chart with an explanatory message card.
+    # Falling back to global average would be misleading.
     grid_data_missing = selected and (sel_grid is None or pd.isna(sel_grid))
-    if selected and sel_grid is not None and pd.notna(sel_grid):
-        current_grid  = sel_grid
-        current_label = f'{selected}'
-    else:
-        current_grid  = global_grid_avg
-        current_label = 'Global avg'
 
-    # Indirect EAF cost: kWh/t x gCO2/kWh x 1e-6 x EUR/tCO2 = EUR/t steel
-    def indirect_eur_per_t(grid_intensity):
-        return EAF_ELECTRICITY_KWH_PER_T * grid_intensity * 1e-6 * cert_price
-
-    # Four bar values in EUR/t of steel.
-    # bof_default and eaf_default may be None if the country has no matching
-    # route code in cbam_defaults. Guard each value individually so the
-    # verified EAF bars always render even when defaults are unavailable.
-    v_bof_default = bof_default * cert_price if bof_default is not None else None
-    v_eaf_default = eaf_default * cert_price if eaf_default is not None else None
-    v_eaf_current = EAF_DIRECT_EMISSIONS * cert_price + indirect_eur_per_t(current_grid)
-    v_eaf_clean   = EAF_DIRECT_EMISSIONS * cert_price + indirect_eur_per_t(CLEAN_GRID_INTENSITY)
-
-    # Build bar list, skipping any scenario where the value is unavailable
-    scenario_defs = [
-        ('BOF\nDefault',                      v_bof_default, BORDER),
-        ('EAF\nDefault',                      v_eaf_default, TEXT_MID),
-        (f'EAF Verified\n{current_label} grid', v_eaf_current, ACCENT),
-        (f'EAF Verified\n{CLEAN_GRID_COUNTRY} grid', v_eaf_clean, ACCENT_MID),
-    ]
-    scenarios  = [s for s, v, _ in scenario_defs if v is not None]
-    values     = [v for _, v, _ in scenario_defs if v is not None]
-    bar_colors = [c for _, v, c in scenario_defs if v is not None]
-
-    # Show a warning if default route values are missing for this selection
-    missing_defaults = [s for s, v, _ in scenario_defs[:2] if v is None]
-    if missing_defaults:
-        route_name = eaf_route_label.split('(')[0].strip()
-        st.caption(
-            f'No CBAM default available for {route_name} '
-            f'{"for " + selected if selected else "globally"}. '
-            f'Default bars omitted.'
-        )
-
-    fig_eaf = go.Figure()
-
-    # Horizontal bar chart: scenario labels on y-axis, cost value on x-axis.
-    # Reversed so BOF Default reads at top and Norway clean grid at bottom.
-    fig_eaf.add_trace(go.Bar(
-        y                 = scenarios[::-1],
-        x                 = values[::-1],
-        orientation       = 'h',
-        marker_color      = bar_colors[::-1],
-        marker_line_width = 0,
-        text              = [f'€{v:.1f}' for v in values[::-1]],
-        textposition      = 'outside',
-        textfont          = dict(size=9, color=TEXT_MID),
-        hovertemplate     = '<b>%{y}</b><br>€%{x:.2f} per tonne of steel<extra></extra>',
-    ))
-
-    # Vertical reference line at EAF default level (vline for horizontal chart).
-    if v_eaf_default is not None:
-        fig_eaf.add_vline(
-            x                   = v_eaf_default,
-            line_dash           = 'dash',
-            line_color          = TEXT_LIGHT,
-            line_width          = 1,
-            annotation_text     = 'EAF default',
-            annotation_position = 'top right',
-            annotation_font     = dict(size=8, color=TEXT_LIGHT),
-        )
-
-    # X-axis fixed so chart does not rescale when switching countries.
-    # Floor of 600 EUR/t covers the highest BOF defaults at base price.
-    eaf_x_max = max(600, max((v for v in values if v is not None), default=0) * 1.25)
-
-    fig_eaf.update_layout(
-        xaxis         = dict(title='€ / tonne of steel',
-                             title_font=dict(size=9, color=TEXT_MID),
-                             tickfont=dict(size=9, color=TEXT_MID),
-                             gridcolor=BORDER, zeroline=False,
-                             range=[0, eaf_x_max]),
-        yaxis         = dict(tickfont=dict(size=9, color=TEXT_MID),
-                             gridcolor='rgba(0,0,0,0)',
-                             automargin=True),
-        paper_bgcolor = BG, plot_bgcolor=BG,
-        margin        = dict(l=10, r=70, t=20, b=40),
-        height        = 220,
-        showlegend    = False,
-    )
-
-    st.plotly_chart(fig_eaf, use_container_width=True, key='eaf_chart')
-
-    # Show a data availability note when falling back to global avg grid
     if grid_data_missing:
-        st.caption(
-            f'No 2024 Ember grid intensity data available for {selected}. '
-            f'Verified EAF bar uses global average ({global_grid_avg:.0f} gCO₂/kWh).'
+        st.markdown(
+            f'<div style="background:{BG_CARD}; border:1px solid {BORDER}; '
+            f'border-radius:8px; padding:1.5rem; height:260px; '
+            f'display:flex; flex-direction:column; justify-content:center; '
+            f'align-items:center; text-align:center;">'
+            f'<div style="font-size:0.65rem; font-weight:600; letter-spacing:0.09em; '
+            f'text-transform:uppercase; color:{TEXT_LIGHT}; margin-bottom:0.5rem;">'
+            f'EAF Scenario Chart</div>'
+            f'<div style="font-size:1rem; color:{TEXT_DARK}; margin-bottom:0.4rem;">'
+            f'No 2024 grid intensity data</div>'
+            f'<div style="font-size:0.7rem; color:{TEXT_LIGHT}; line-height:1.5;">'
+            f'Ember does not have a 2024 CO₂ intensity figure for {selected}.<br>'
+            f'The verified EAF scenario requires grid intensity to compute<br>'
+            f'indirect emissions. Chart unavailable for this country.'
+            f'</div></div>',
+            unsafe_allow_html=True)
+    else:
+        if selected and sel_grid is not None and pd.notna(sel_grid):
+            current_grid  = sel_grid
+            current_label = f'{selected}'
+        else:
+            current_grid  = global_grid_avg
+            current_label = 'Global avg'
+
+        def indirect_eur_per_t(grid_intensity):
+            return EAF_ELECTRICITY_KWH_PER_T * grid_intensity * 1e-6 * cert_price
+
+        v_bof_default = bof_default * cert_price if bof_default is not None else None
+        v_eaf_default = eaf_default * cert_price if eaf_default is not None else None
+        v_eaf_current = EAF_DIRECT_EMISSIONS * cert_price + indirect_eur_per_t(current_grid)
+        v_eaf_clean   = EAF_DIRECT_EMISSIONS * cert_price + indirect_eur_per_t(CLEAN_GRID_INTENSITY)
+
+        scenario_defs = [
+            ('BOF\nDefault',                        v_bof_default, BORDER),
+            ('EAF\nDefault',                        v_eaf_default, TEXT_MID),
+            (f'EAF Verified\n{current_label} grid', v_eaf_current, ACCENT),
+            (f'EAF Verified\n{CLEAN_GRID_COUNTRY} grid', v_eaf_clean, ACCENT_MID),
+        ]
+        scenarios  = [s for s, v, _ in scenario_defs if v is not None]
+        values     = [v for _, v, _ in scenario_defs if v is not None]
+        bar_colors = [c for _, v, c in scenario_defs if v is not None]
+
+        missing_defaults = [s for s, v, _ in scenario_defs[:2] if v is None]
+        if missing_defaults:
+            route_name = eaf_route_label.split('(')[0].strip()
+            st.caption(
+                f'No CBAM default available for {route_name} '
+                f'{"for " + selected if selected else "globally"}. '
+                f'Default bars omitted.'
+            )
+
+        fig_eaf = go.Figure()
+        fig_eaf.add_trace(go.Bar(
+            y                 = scenarios[::-1],
+            x                 = values[::-1],
+            orientation       = 'h',
+            marker_color      = bar_colors[::-1],
+            marker_line_width = 0,
+            text              = [f'€{v:.1f}' for v in values[::-1]],
+            textposition      = 'outside',
+            textfont          = dict(size=9, color=TEXT_MID),
+            hovertemplate     = '<b>%{y}</b><br>€%{x:.2f} per tonne of steel<extra></extra>',
+        ))
+
+        if v_eaf_default is not None:
+            fig_eaf.add_vline(
+                x                   = v_eaf_default,
+                line_dash           = 'dash',
+                line_color          = TEXT_LIGHT,
+                line_width          = 1,
+                annotation_text     = 'EAF default',
+                annotation_position = 'top right',
+                annotation_font     = dict(size=8, color=TEXT_LIGHT),
+            )
+
+        eaf_x_max = max(600, max((v for v in values if v is not None), default=0) * 1.25)
+
+        fig_eaf.update_layout(
+            xaxis         = dict(title='€ / tonne of steel',
+                                 title_font=dict(size=9, color=TEXT_MID),
+                                 tickfont=dict(size=9, color=TEXT_MID),
+                                 gridcolor=BORDER, zeroline=False,
+                                 range=[0, eaf_x_max]),
+            yaxis         = dict(tickfont=dict(size=9, color=TEXT_MID),
+                                 gridcolor='rgba(0,0,0,0)',
+                                 automargin=True),
+            paper_bgcolor = BG, plot_bgcolor=BG,
+            margin        = dict(l=10, r=70, t=20, b=40),
+            height        = 220,
+            showlegend    = False,
         )
 
-    st.markdown(
-        f'<p class="method-note">'
-        f'Default bars use EU CBAM default values × certificate price. '
-        f'Verified EAF bars use Worldsteel Scrap-EAF direct emissions '
-        f'(0.69 tCO₂/t) + indirect ({EAF_ELECTRICITY_KWH_PER_T} kWh/t × grid intensity). '
-        f'No markup on verified submissions. '
-        f'Clean grid: {CLEAN_GRID_COUNTRY} {CLEAN_GRID_INTENSITY} gCO₂/kWh (Ember 2024).'
-        f'</p>',
-        unsafe_allow_html=True)
+        st.plotly_chart(fig_eaf, use_container_width=True, key='eaf_chart')
 
+        st.markdown(
+            f'<p class="method-note">'
+            f'Default bars use EU CBAM default values × certificate price. '
+            f'Verified EAF bars use Worldsteel Scrap-EAF direct emissions '
+            f'(0.69 tCO₂/t) + indirect ({EAF_ELECTRICITY_KWH_PER_T} kWh/t × grid intensity). '
+            f'No markup on verified submissions. '
+            f'Clean grid: {CLEAN_GRID_COUNTRY} {CLEAN_GRID_INTENSITY} gCO₂/kWh (Ember 2024).'
+            f'</p>',
+            unsafe_allow_html=True)
 
 # ── Grid generation mix chart ────────────────────────────────────────────────
 # Shows each fuel type as a share of total electricity generation (%).
@@ -998,10 +1004,21 @@ with col_grid:
 
     grid_gen_available = not df_gen.empty
     if not grid_gen_available:
-        st.caption(
-            f'No 2024 Ember generation data available'
+        st.markdown(
+            f'<div style="background:{BG_CARD}; border:1px solid {BORDER}; '
+            f'border-radius:8px; padding:1.5rem; height:320px; '
+            f'display:flex; flex-direction:column; justify-content:center; '
+            f'align-items:center; text-align:center;">'
+            f'<div style="font-size:0.65rem; font-weight:600; letter-spacing:0.09em; '
+            f'text-transform:uppercase; color:{TEXT_LIGHT}; margin-bottom:0.5rem;">'
+            f'Grid Generation Mix</div>'
+            f'<div style="font-size:1rem; color:{TEXT_DARK}; margin-bottom:0.4rem;">'
+            f'No 2024 generation data</div>'
+            f'<div style="font-size:0.7rem; color:{TEXT_LIGHT}; line-height:1.5;">'
+            f'Ember does not have 2024 generation figures'
             f'{", for " + selected if selected else ""}.'
-        )
+            f'</div></div>',
+            unsafe_allow_html=True)
 
     gen_lookup = df_gen.set_index('fuel_type')['value'].to_dict()
     total_gen  = sum(gen_lookup.get(f, 0) for f in FOSSIL_FUELS + CLEAN_FUELS)
