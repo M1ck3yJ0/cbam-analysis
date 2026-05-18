@@ -127,7 +127,7 @@ h1, h2, h3 {{
     border-left: 4px solid {ACCENT};
     box-shadow: 0 1px 4px rgba(0,0,0,0.06);
     height: 100%;
-    min-height: 100px;
+    min-height: 68px;
 }}
 .kpi-card-country {{
     background: {BG_CARD};
@@ -136,7 +136,7 @@ h1, h2, h3 {{
     border-left: 4px solid {ACCENT_POP};
     box-shadow: 0 1px 4px rgba(0,0,0,0.06);
     height: 100%;
-    min-height: 100px;
+    min-height: 68px;
 }}
 .kpi-card-neutral {{
     background: {BG_CARD};
@@ -145,7 +145,7 @@ h1, h2, h3 {{
     border-left: 4px solid {BORDER};
     box-shadow: 0 1px 4px rgba(0,0,0,0.06);
     height: 100%;
-    min-height: 100px;
+    min-height: 68px;
 }}
 .kpi-label {{
     font-size: 0.63rem;
@@ -385,8 +385,6 @@ st.markdown('<div class="filter-bar">', unsafe_allow_html=True)
 fc1, _gap, fc2, fc3 = st.columns([1.5, 0.4, 4, 1.5])
 
 with fc1:
-    st.markdown('<p class="filter-label">Certificate Price (€/tCO₂)</p>',
-                unsafe_allow_html=True)
     cert_price = st.slider(
         '_cert', min_value=25.0, max_value=150.0,
         value=BASE_PRICE, step=0.5, format='€%.2f',
@@ -395,7 +393,6 @@ with fc1:
     )
 
 with fc2:
-    st.markdown('<p class="filter-label">Sectors</p>', unsafe_allow_html=True)
     selected_sectors = st.pills(
         '_sectors', options=ALL_SECTORS, default=ALL_SECTORS,
         selection_mode='multi', label_visibility='collapsed',
@@ -404,7 +401,6 @@ with fc2:
         selected_sectors = ALL_SECTORS
 
 with fc3:
-    st.markdown('<p class="filter-label">Country</p>', unsafe_allow_html=True)
     country_options = ['All countries'] + sorted(df_countries['country'].tolist())
     current_idx     = 0
     if st.session_state['selected_country'] in country_options:
@@ -576,7 +572,7 @@ with k3:
     else:
         st.markdown(
             f'<div class="kpi-card">'
-            f'<div class="kpi-label">Top 3 Countries — Share of Global Bill</div>'
+            f'<div class="kpi-label">Top 3 Share of CBAM Bill</div>'
             f'<div class="kpi-value">{top3_share:.0f}%</div>'
             f'<div class="kpi-sub">{top3_names}</div>'
             f'</div>', unsafe_allow_html=True)
@@ -614,17 +610,17 @@ with k5:
         f'<div class="kpi-card-neutral">'
         f'<div class="kpi-label">EAF + Clean Grid CO₂ Saving</div>'
         f'<div class="kpi-value">~34%</div>'
-        f'<div class="kpi-sub">Est. CO₂ reduction vs BOF default · Pending full calc.</div>'
+        f'<div class="kpi-sub">Coming soon</div>'
         f'</div>', unsafe_allow_html=True)
 
 st.markdown('<br>', unsafe_allow_html=True)
 
 
-# ── Map metric toggle + clear button ──────────────────────────────────────────
-map_label_col, toggle_col, clear_col = st.columns([3, 2, 2])
+# ── Map metric toggle and title ──────────────────────────────────────────────
+# Toggle rendered first so map_metric is defined before map_label_col uses it.
+# Clear button removed: clicking the selected country again deselects it.
+map_label_col, toggle_col = st.columns([3, 2])
 
-# Render toggle first so map_metric is defined before map_label_col uses it.
-# Streamlit executes with() blocks in source order, so toggle must come first.
 with toggle_col:
     map_metric = st.segmented_control(
         '_map_metric',
@@ -633,16 +629,6 @@ with toggle_col:
         label_visibility = 'collapsed',
     )
 
-with clear_col:
-    if selected:
-        if st.button(f'✕ Clear filter: {selected}',
-                     key='clear_map', type='tertiary'):
-            st.session_state['selected_country'] = None
-            st.rerun()
-    else:
-        st.empty()
-
-# Dynamic map title based on selected metric. Rendered after map_metric is set.
 MAP_TITLES = {
     '% of exports' : 'CBAM cost as % of CBAM-sector exports',
     'Abs. cost'    : 'Estimated CBAM bill by country',
@@ -652,12 +638,10 @@ map_title = MAP_TITLES.get(map_metric, '')
 
 with map_label_col:
     st.markdown(
-        f'<div style="line-height:1.4; padding-top:2px;">'
-        f'<span style="font-size:0.82rem; font-weight:600; color:{TEXT_DARK};">'
-        f'{map_title}</span><br>'
-        f'<span style="font-size:0.65rem; color:{TEXT_LIGHT};">'
-        f'Click a country to filter all charts</span>'
-        f'</div>',
+        f'<p class="section-label" style="margin-bottom:0.1rem;">'
+        f'{map_title}</p>'
+        f'<p style="font-size:0.62rem; color:{TEXT_LIGHT}; margin:0;">'
+        f'Click to select · click again to deselect</p>',
         unsafe_allow_html=True)
 
 METRIC_CONFIG = {
@@ -671,7 +655,7 @@ metric_col, metric_label, metric_fmt = METRIC_CONFIG.get(
 
 
 # ── Row 1: Map + top 10 bar ───────────────────────────────────────────────────
-col_map, col_bar = st.columns([5, 1.4], gap='large')
+col_map, col_bar = st.columns([4, 1.6], gap='small')
 
 with col_map:
     df_map = df_c[df_c[metric_col].notna() & (df_c[metric_col] > 0)].copy()
@@ -787,7 +771,7 @@ with col_bar:
         showlegend    = False,
         paper_bgcolor = BG, plot_bgcolor=BG,
         margin        = dict(l=10, r=10, t=10, b=50),
-        height        = 380,
+        height        = 420,
     )
     st.plotly_chart(fig_bar, use_container_width=True, key='bar_chart')
 
