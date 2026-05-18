@@ -820,13 +820,34 @@ with col_bar:
         .nlargest(10, metric_col)
     )
 
+    # Scale x values and format axis labels based on the active metric.
+    # Absolute cost is in EUR — divide by 1e9 for readable B labels.
+    # Other metrics are already in human-readable units.
+    if map_metric == 'Abs. cost':
+        bar_x      = [v / 1e9 for v in df_top10[metric_col].tolist()]
+        bar_xfmt   = '.2f'
+        bar_xsuffix = 'B'
+        bar_hover  = '<b>%{y}</b><br>€%{x:.2f}B<extra></extra>'
+        bar_tickfmt = '.2f'
+        bar_ticksuffix = 'B'
+    elif map_metric == 'Cost / tonne':
+        bar_x      = df_top10[metric_col].tolist()
+        bar_hover  = '<b>%{y}</b><br>€%{x:,.0f}/t<extra></extra>'
+        bar_tickfmt = ',.0f'
+        bar_ticksuffix = ''
+    else:  # % of exports
+        bar_x      = df_top10[metric_col].tolist()
+        bar_hover  = '<b>%{y}</b><br>%{x:.1f}%<extra></extra>'
+        bar_tickfmt = '.1f'
+        bar_ticksuffix = '%'
+
     fig_bar = go.Figure(go.Bar(
         y             = df_top10['country'].tolist(),
-        x             = df_top10[metric_col].tolist(),
+        x             = bar_x,
         orientation   = 'h',
         marker_color  = [ACCENT_POP if c == selected else ACCENT
                          for c in df_top10['country']],
-        hovertemplate = '<b>%{y}</b><br>' + bar_label + ': %{x:,.2f}<extra></extra>',
+        hovertemplate = bar_hover,
     ))
 
     # top margin matches the nested column header height inside col_map
@@ -840,7 +861,8 @@ with col_bar:
             tickfont=dict(size=9, color=TEXT_MID),
             gridcolor=BORDER,
             side='top',
-            tickformat=',.0f',
+            tickformat=bar_tickfmt,
+            ticksuffix=bar_ticksuffix,
         ),
         showlegend    = False,
         paper_bgcolor = BG, plot_bgcolor=BG,
