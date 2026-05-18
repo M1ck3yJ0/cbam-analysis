@@ -73,6 +73,10 @@ ROUTE_OPTIONS = {
     'Low Alloy Steel (Scrap-EAF vs BF-BOF)': ('H', 'F'),
 }
 
+# BASE_PRICE_EUR matches the notebook constant. Used only to rescale the
+# per-sector convenience cost columns stored in cbam_cost_by_country.
+BASE_PRICE = 75.36
+
 # ── Styling ───────────────────────────────────────────────────────────────────
 st.markdown(f"""
 <style>
@@ -212,10 +216,6 @@ h1, h2, h3 {{
 """, unsafe_allow_html=True)
 
 
-# ── Constants ─────────────────────────────────────────────────────────────────
-BASE_PRICE = 75.36
-
-
 # ── Database connection ───────────────────────────────────────────────────────
 @st.cache_resource
 def get_connection():
@@ -228,43 +228,75 @@ con = get_connection()
 
 
 # ── Data loading ──────────────────────────────────────────────────────────────
+
 @st.cache_data
 def load_country_data():
-    """Country-level aggregated costs joined with iso3 from crosswalk."""
+    """Country-level exposure data.
+
+    iso3, global export value, and the price-independent exposure ratio are
+    all pre-joined in cbam_cost_by_country by the calculations notebook.
+    No additional joins needed here.
+    """
     return pd.read_sql("""
-        SELECT c.country, c.iso2, cw.iso3,
-            c.total_import_tonnes,
-            c.total_import_value_eur,
-            c.total_embedded_co2_high      AS embedded_co2_high,
-            c.total_cbam_cost_high_route   AS cost_high,
-            c.total_cbam_cost_low_route    AS cost_low,
-            c.has_any_route_variation
-        FROM cbam_cost_by_country c
-        LEFT JOIN country_crosswalk cw ON c.country = cw.country
-        ORDER BY c.total_cbam_cost_high_route DESC
+        SELECT
+            country,
+            iso2,
+            iso3,
+            rank,
+            total_import_tonnes,
+            total_eu_import_value_eur,
+            global_cbam_export_value_eur,
+            total_embedded_co2_high      AS embedded_co2_high,
+            total_embedded_co2_low       AS embedded_co2_low,
+            cbam_eu_exposure_ratio_high  AS exposure_ratio_high,
+            cbam_eu_exposure_ratio_low   AS exposure_ratio_low,
+            has_any_route_variation
+        FROM cbam_cost_by_country
+        ORDER BY rank
     """, con)
 
 @st.cache_data
 def load_granular_data():
-    """Granular country x sector x CN code cost data."""
+    """Granular country x sector x CN code exposure data.
+
+    Euro costs are not stored in this table. They are computed at runtime
+    from embedded_co2 x the user-selected certificate price, so they always
+    reflect the current slider value.
+    """
     return pd.read_sql("""
-        SELECT country, sector, has_route_variation,
-            import_tonnes, import_value_eur,
+        SELECT
+            country,
+            sector,
+            has_route_variation,
+            import_tonnes,
+            eu_import_value_eur,
             embedded_co2_high_route  AS co2_high,
-            cbam_cost_eur_high_route AS cost_high,
-            cbam_cost_eur_low_route  AS cost_low
+            embedded_co2_low_route   AS co2_low
         FROM cbam_cost_by_country_sector
     """, con)
 
 @st.cache_data
-def load_global_exports():
-    """Total global exports per country from Comtrade."""
+def load_sector_cost_pivots():
+    """Per-sector cost convenience columns stored at BASE_PRICE = 75.36.
+
+    These are used only for the sector donut chart. The app rescales them
+    to the user-selected certificate price before rendering:
+        cost_at_selected = cost_at_base * (cert_price / BASE_PRICE)
+    """
     return pd.read_sql("""
-        SELECT country,
-            SUM(export_value_eur) AS total_export_value_eur,
-            SUM(export_tonnes)    AS total_export_tonnes
-        FROM global_exports
-        GROUP BY country
+        SELECT
+            country,
+            cost_aluminium_high_route_eur,
+            cost_cement_high_route_eur,
+            cost_fertilizers_high_route_eur,
+            cost_hydrogen_high_route_eur,
+            cost_iron_and_steel_high_route_eur,
+            cost_aluminium_low_route_eur,
+            cost_cement_low_route_eur,
+            cost_fertilizers_low_route_eur,
+            cost_hydrogen_low_route_eur,
+            cost_iron_and_steel_low_route_eur
+        FROM cbam_cost_by_country
     """, con)
 
 @st.cache_data
@@ -309,7 +341,7 @@ def load_cbam_defaults_steel():
 
 df_countries        = load_country_data()
 df_granular         = load_granular_data()
-df_global_exports   = load_global_exports()
+df_sector_pivots    = load_sector_cost_pivots()
 df_grid_intensity   = load_grid_intensity()
 df_grid_capacity    = load_grid_capacity()
 df_grid_generation  = load_grid_generation()
@@ -366,19 +398,23 @@ st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ── Derived data ──────────────────────────────────────────────────────────────
-price_ratio = cert_price / BASE_PRICE
+# All euro costs are computed here from embedded CO2 x the selected certificate
+# price. Nothing is read directly from a stored euro cost column as a final
+# value (the sector pivot columns are rescaled from BASE_PRICE below).
 
+# Filter granular table to selected sectors, then compute costs at current price
 df_g = df_granular[df_granular['sector'].isin(selected_sectors)].copy()
-df_g['cost_high'] = df_g['cost_high'] * price_ratio
-df_g['cost_low']  = df_g['cost_low']  * price_ratio
+df_g['cost_high'] = df_g['co2_high'] * cert_price
+df_g['cost_low']  = df_g['co2_low']  * cert_price
 
+# Aggregate to country level from the filtered granular table
 df_c = (
     df_g.groupby('country', as_index=False)
     .agg(
         cost_high               = ('cost_high',           'sum'),
         cost_low                = ('cost_low',            'sum'),
         import_tonnes           = ('import_tonnes',       'sum'),
-        import_value_eur        = ('import_value_eur',    'sum'),
+        eu_import_value_eur     = ('eu_import_value_eur', 'sum'),
         co2_high                = ('co2_high',            'sum'),
         has_any_route_variation = ('has_route_variation', 'any'),
     )
@@ -386,48 +422,63 @@ df_c = (
     .reset_index(drop=True)
 )
 
-df_c = df_c.merge(df_countries[['country', 'iso3']], on='country', how='left')
+# Join iso3, global export value, and exposure ratio from the country table
 df_c = df_c.merge(
-    df_global_exports[['country', 'total_export_value_eur', 'total_export_tonnes']],
+    df_countries[[
+        'country', 'iso3',
+        'global_cbam_export_value_eur',
+        'exposure_ratio_high', 'exposure_ratio_low',
+    ]],
     on='country', how='left'
 )
+
+# Join grid intensity for the EAF chart and KPI card 4
 df_c = df_c.merge(
     df_grid_intensity[['country', 'co2_intensity_gco2_kwh']],
     on='country', how='left'
 )
 
+# Cost as % of global CBAM-sector exports.
+# exposure_ratio_high = embedded_co2_high / global_cbam_export_value_eur (tCO2/EUR).
+# Multiplying by cert_price gives cost / global_export_value, i.e. the share.
+# This correctly uses total global exports as the denominator, not EU import
+# value, so it reflects how significant the CBAM bill is relative to the
+# country's full export activity in these sectors.
 df_c['cost_pct_export'] = (
-    df_c['cost_high'] / df_c['import_value_eur'].replace(0, float('nan')) * 100
+    df_c['exposure_ratio_high'] * cert_price * 100
 ).round(2)
+
+# Cost per tonne of CBAM-sector goods imported by the EU
 df_c['cost_per_tonne'] = (
     df_c['cost_high'] / df_c['import_tonnes'].replace(0, float('nan'))
 ).round(2)
 
-total_cost_high   = df_c['cost_high'].sum()
-total_cost_low    = df_c['cost_low'].sum()
-total_co2         = df_g['co2_high'].sum()
-total_eu_imports  = df_c['import_value_eur'].sum()
-total_global_exp  = df_global_exports['total_export_value_eur'].sum()
-global_pct_export = (total_eu_imports / total_global_exp * 100) if total_global_exp else None
-n_exposed         = (df_c['cost_high'] > 0).sum()
-top3_cost         = df_c.head(3)['cost_high'].sum()
-top3_share        = top3_cost / total_cost_high * 100 if total_cost_high else 0
-top3_names        = ', '.join(df_c.head(3)['country'].tolist())
+# Global totals used in KPI cards
+total_cost_high  = df_c['cost_high'].sum()
+total_cost_low   = df_c['cost_low'].sum()
+total_co2        = df_g['co2_high'].sum()
+total_global_exp = df_countries['global_cbam_export_value_eur'].sum()
+total_eu_imports = df_c['eu_import_value_eur'].sum()
+global_pct_exp   = (total_eu_imports / total_global_exp * 100) if total_global_exp else None
+n_exposed        = (df_c['cost_high'] > 0).sum()
+top3_cost        = df_c.head(3)['cost_high'].sum()
+top3_share       = top3_cost / total_cost_high * 100 if total_cost_high else 0
+top3_names       = ', '.join(df_c.head(3)['country'].tolist())
 
 selected = st.session_state['selected_country']
 
-sel_cost = sel_co2 = sel_pct = sel_eu_imp = sel_total_exp = sel_grid = sel_rank = None
+sel_cost = sel_co2 = sel_pct = sel_eu_imp = sel_global_exp = sel_grid = sel_rank = None
 if selected:
     sel_row = df_c[df_c['country'] == selected]
     if len(sel_row) > 0:
-        s             = sel_row.iloc[0]
-        sel_cost      = s['cost_high']
-        sel_co2       = s['co2_high']
-        sel_pct       = s['cost_pct_export']
-        sel_eu_imp    = s['import_value_eur']
-        sel_total_exp = s['total_export_value_eur']
-        sel_grid      = s['co2_intensity_gco2_kwh']
-        sel_rank      = int(sel_row.index[0]) + 1
+        s              = sel_row.iloc[0]
+        sel_cost       = s['cost_high']
+        sel_co2        = s['co2_high']
+        sel_pct        = s['cost_pct_export']
+        sel_eu_imp     = s['eu_import_value_eur']
+        sel_global_exp = s['global_cbam_export_value_eur']
+        sel_grid       = s['co2_intensity_gco2_kwh']
+        sel_rank       = int(sel_row.index[0]) + 1
 
 
 # ── KPI cards (5) ─────────────────────────────────────────────────────────────
@@ -450,24 +501,26 @@ with k1:
             f'</div>', unsafe_allow_html=True)
 
 with k2:
+    # Cost as % of total global CBAM-sector exports (not EU import value only).
+    # The denominator is the country's worldwide exports in CBAM-covered goods.
     if selected and sel_pct is not None and pd.notna(sel_pct):
         eu_str  = f'EU imports: €{sel_eu_imp/1e9:.2f}B' if sel_eu_imp else ''
-        tot_str = (f'Total exports: €{sel_total_exp/1e9:.2f}B'
-                   if sel_total_exp and pd.notna(sel_total_exp) else '')
+        exp_str = (f'Global CBAM exports: €{sel_global_exp/1e9:.2f}B'
+                   if sel_global_exp and pd.notna(sel_global_exp) else '')
         st.markdown(
             f'<div class="kpi-card-country">'
-            f'<div class="kpi-label">CBAM Cost as % of Exports — {selected}</div>'
+            f'<div class="kpi-label">CBAM Cost as % of Global CBAM Exports — {selected}</div>'
             f'<div class="kpi-value">{sel_pct:.1f}%</div>'
-            f'<div class="kpi-sub">{eu_str}<br>{tot_str}</div>'
+            f'<div class="kpi-sub">{eu_str}<br>{exp_str}</div>'
             f'</div>', unsafe_allow_html=True)
     else:
-        pct_str = f'{global_pct_export:.1f}%' if global_pct_export else 'N/A'
+        pct_str = f'{global_pct_exp:.1f}%' if global_pct_exp else 'N/A'
         st.markdown(
             f'<div class="kpi-card">'
-            f'<div class="kpi-label">CBAM-Sector Exports Reaching EU</div>'
+            f'<div class="kpi-label">CBAM-Sector EU Imports as % of Global Exports</div>'
             f'<div class="kpi-value">{pct_str}</div>'
-            f'<div class="kpi-sub">Total: €{total_global_exp/1e9:.1f}B'
-            f' · EU: €{total_eu_imports/1e9:.1f}B</div>'
+            f'<div class="kpi-sub">Global CBAM exports: €{total_global_exp/1e9:.1f}B'
+            f' · EU imports: €{total_eu_imports/1e9:.1f}B</div>'
             f'</div>', unsafe_allow_html=True)
 
 with k3:
@@ -541,9 +594,9 @@ with clear_col:
         st.empty()
 
 METRIC_CONFIG = {
-    '% of exports' : ('cost_pct_export', 'CBAM cost as % of exports',   '%.1f%%'),
-    'Abs. cost'    : ('cost_high',        'Est. CBAM cost (€)',           '€%.0f'),
-    'Cost / tonne' : ('cost_per_tonne',   'Est. CBAM cost per tonne (€)', '€%.2f'),
+    '% of exports' : ('cost_pct_export', 'CBAM cost as % of global CBAM exports', '%.1f%%'),
+    'Abs. cost'    : ('cost_high',        'Est. CBAM cost (€)',                    '€%.0f'),
+    'Cost / tonne' : ('cost_per_tonne',   'Est. CBAM cost per tonne (€)',          '€%.2f'),
 }
 metric_col, metric_label, metric_fmt = METRIC_CONFIG.get(
     map_metric, METRIC_CONFIG['% of exports']
@@ -620,7 +673,7 @@ with col_map:
 
 with col_bar:
     bar_label = {
-        '% of exports' : 'CBAM cost as % of exports',
+        '% of exports' : 'CBAM cost as % of global CBAM exports',
         'Abs. cost'    : 'Estimated CBAM cost (€)',
         'Cost / tonne' : 'Est. CBAM cost per tonne (€)',
     }.get(map_metric, 'Estimated CBAM cost (€)')
@@ -672,11 +725,34 @@ with col_donut:
     st.markdown(f'<p class="section-label">{donut_label}</p>',
                 unsafe_allow_html=True)
 
-    df_donut = df_g[df_g['country'] == selected] if selected else df_g
-    df_ds = (
-        df_donut.groupby('sector', as_index=False)['cost_high'].sum()
-        .sort_values('cost_high', ascending=False)
-    )
+    # The sector pivot columns in df_sector_pivots are stored at BASE_PRICE.
+    # Rescale to the current certificate price before rendering.
+    price_ratio = cert_price / BASE_PRICE
+
+    if selected:
+        # Country-specific sector breakdown from the pivot columns
+        pivot_row = df_sector_pivots[df_sector_pivots['country'] == selected]
+        if not pivot_row.empty:
+            r = pivot_row.iloc[0]
+            df_ds = pd.DataFrame([
+                {'sector': 'Iron and Steel', 'cost_high': r['cost_iron_and_steel_high_route_eur'] * price_ratio},
+                {'sector': 'Aluminium',      'cost_high': r['cost_aluminium_high_route_eur']      * price_ratio},
+                {'sector': 'Cement',         'cost_high': r['cost_cement_high_route_eur']         * price_ratio},
+                {'sector': 'Fertilizers',    'cost_high': r['cost_fertilizers_high_route_eur']    * price_ratio},
+                {'sector': 'Hydrogen',       'cost_high': r['cost_hydrogen_high_route_eur']       * price_ratio},
+            ])
+            # Filter to selected sectors only
+            df_ds = df_ds[df_ds['sector'].isin(selected_sectors)]
+        else:
+            df_ds = pd.DataFrame(columns=['sector', 'cost_high'])
+    else:
+        # Global view: aggregate cost_high from the already-computed df_g
+        df_ds = (
+            df_g.groupby('sector', as_index=False)['cost_high'].sum()
+            .sort_values('cost_high', ascending=False)
+        )
+
+    df_ds = df_ds[df_ds['cost_high'] > 0].sort_values('cost_high', ascending=False)
 
     fig_donut = go.Figure(go.Pie(
         labels        = df_ds['sector'],
@@ -726,7 +802,7 @@ with col_eaf:
     bof_default = get_default(bof_code, selected)
     eaf_default = get_default(eaf_code, selected)
 
-    # Grid intensity for current scenario bar
+    # Grid intensity for the current scenario bar
     if selected and sel_grid is not None and pd.notna(sel_grid):
         current_grid  = sel_grid
         current_label = f'{selected}'
@@ -734,17 +810,13 @@ with col_eaf:
         current_grid  = global_grid_avg
         current_label = 'Global avg'
 
-    # Indirect EAF cost: kWh/t × gCO2/kWh × 1e-6 × €/tCO2 = €/t steel
+    # Indirect EAF cost: kWh/t x gCO2/kWh x 1e-6 x EUR/tCO2 = EUR/t steel
     def indirect_eur_per_t(grid_intensity):
         return EAF_ELECTRICITY_KWH_PER_T * grid_intensity * 1e-6 * cert_price
 
-    # Four bar values in €/t of steel
-    v_bof_default      = bof_default * cert_price
-    v_eaf_default      = eaf_default * cert_price
-    v_eaf_current      = (EAF_DIRECT_EMISSIONS + indirect_eur_per_t(current_grid) / cert_price) * cert_price
-    v_eaf_clean        = (EAF_DIRECT_EMISSIONS + indirect_eur_per_t(CLEAN_GRID_INTENSITY) / cert_price) * cert_price
-
-    # Fix: indirect_eur_per_t already returns €/t, don't divide by cert_price again
+    # Four bar values in EUR/t of steel
+    v_bof_default = bof_default * cert_price
+    v_eaf_default = eaf_default * cert_price
     v_eaf_current = EAF_DIRECT_EMISSIONS * cert_price + indirect_eur_per_t(current_grid)
     v_eaf_clean   = EAF_DIRECT_EMISSIONS * cert_price + indirect_eur_per_t(CLEAN_GRID_INTENSITY)
 
@@ -754,8 +826,8 @@ with col_eaf:
         f'EAF Verified\n{current_label} grid',
         f'EAF Verified\n{CLEAN_GRID_COUNTRY} grid',
     ]
-    values      = [v_bof_default, v_eaf_default, v_eaf_current, v_eaf_clean]
-    bar_colors  = [BORDER, TEXT_MID, ACCENT, ACCENT_MID]
+    values     = [v_bof_default, v_eaf_default, v_eaf_current, v_eaf_clean]
+    bar_colors = [BORDER, TEXT_MID, ACCENT, ACCENT_MID]
 
     fig_eaf = go.Figure()
 
