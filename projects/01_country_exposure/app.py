@@ -623,10 +623,8 @@ st.markdown('<br>', unsafe_allow_html=True)
 # ── Map metric toggle + clear button ──────────────────────────────────────────
 map_label_col, toggle_col, clear_col = st.columns([3, 2, 2])
 
-with map_label_col:
-    st.markdown('<p class="section-label">Click a country to filter</p>',
-                unsafe_allow_html=True)
-
+# Render toggle first so map_metric is defined before map_label_col uses it.
+# Streamlit executes with() blocks in source order, so toggle must come first.
 with toggle_col:
     map_metric = st.segmented_control(
         '_map_metric',
@@ -637,12 +635,30 @@ with toggle_col:
 
 with clear_col:
     if selected:
-        if st.button(f'✕\u2002Clear filter:\u2002{selected}',
+        if st.button(f'✕ Clear filter: {selected}',
                      key='clear_map', type='tertiary'):
             st.session_state['selected_country'] = None
             st.rerun()
     else:
         st.empty()
+
+# Dynamic map title based on selected metric. Rendered after map_metric is set.
+MAP_TITLES = {
+    '% of exports' : 'CBAM cost as % of CBAM-sector exports',
+    'Abs. cost'    : 'Estimated CBAM bill by country',
+    'Cost / tonne' : 'Estimated CBAM cost per imported tonne',
+}
+map_title = MAP_TITLES.get(map_metric, '')
+
+with map_label_col:
+    st.markdown(
+        f'<div style="line-height:1.4; padding-top:2px;">'
+        f'<span style="font-size:0.82rem; font-weight:600; color:{TEXT_DARK};">'
+        f'{map_title}</span><br>'
+        f'<span style="font-size:0.65rem; color:{TEXT_LIGHT};">'
+        f'Click a country to filter all charts</span>'
+        f'</div>',
+        unsafe_allow_html=True)
 
 METRIC_CONFIG = {
     '% of exports' : ('cost_pct_export', 'CBAM cost as % of CBAM-sector exports', '%.1f%%'),
@@ -655,7 +671,7 @@ metric_col, metric_label, metric_fmt = METRIC_CONFIG.get(
 
 
 # ── Row 1: Map + top 10 bar ───────────────────────────────────────────────────
-col_map, col_bar = st.columns([3, 2], gap='large')
+col_map, col_bar = st.columns([5, 1.4], gap='large')
 
 with col_map:
     df_map = df_c[df_c[metric_col].notna() & (df_c[metric_col] > 0)].copy()
