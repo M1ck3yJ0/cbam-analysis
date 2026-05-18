@@ -382,6 +382,16 @@ if 'selected_country' not in st.session_state:
 # ── Sticky filter bar ─────────────────────────────────────────────────────────
 st.markdown('<div class="filter-bar">', unsafe_allow_html=True)
 
+st.markdown(
+    f'<div style="text-align:center; padding:0.2rem 0 0.4rem 0;">'
+    f'<div style="font-family:\'DM Serif Display\', serif; '
+    f'font-size:2rem; color:{TEXT_DARK}; line-height:1;">'
+    f'CBAM Country Exposure</div>'
+    f'<div style="font-size:0.65rem; color:{TEXT_LIGHT}; margin-top:0.2rem;">'
+    f'EU trade flows · UN Comtrade · Ember · 2024'
+    f'</div></div>',
+    unsafe_allow_html=True)
+
 fc1, _gap, fc2, fc3 = st.columns([1.5, 0.4, 4, 1.5])
 
 with fc1:
@@ -616,33 +626,24 @@ with k5:
 st.markdown('<br>', unsafe_allow_html=True)
 
 
-# ── Map metric toggle and title ──────────────────────────────────────────────
-# Toggle rendered first so map_metric is defined before map_label_col uses it.
-# Clear button removed: clicking the selected country again deselects it.
-map_label_col, toggle_col = st.columns([3, 2])
-
-with toggle_col:
-    map_metric = st.segmented_control(
-        '_map_metric',
-        options          = ['% of exports', 'Abs. cost', 'Cost / tonne'],
-        default          = '% of exports',
-        label_visibility = 'collapsed',
-    )
-
+# ── Map metric toggle ────────────────────────────────────────────────────
+# map_metric must be defined before METRIC_CONFIG and before col_map opens.
+# The toggle renders in a two-column row: title label left, toggle right.
+# col_bar section label sits at the same vertical level since both share
+# this pre-chart row.
 MAP_TITLES = {
-    '% of exports' : 'CBAM cost as % of CBAM-sector exports',
     'Abs. cost'    : 'Estimated CBAM bill by country',
     'Cost / tonne' : 'Estimated CBAM cost per imported tonne',
+    '% of exports' : 'CBAM cost as % of CBAM-sector exports',
 }
-map_title = MAP_TITLES.get(map_metric, '')
 
-with map_label_col:
-    st.markdown(
-        f'<p class="section-label" style="margin-bottom:0.1rem;">'
-        f'{map_title}</p>'
-        f'<p style="font-size:0.62rem; color:{TEXT_LIGHT}; margin:0;">'
-        f'Click to select · click again to deselect</p>',
-        unsafe_allow_html=True)
+# map_metric is read from session_state so METRIC_CONFIG can use it before
+# col_map opens. The toggle widget inside col_map updates session_state on
+# each interaction, triggering a rerun with the correct value.
+if 'map_metric' not in st.session_state:
+    st.session_state['map_metric'] = 'Abs. cost'
+map_metric = st.session_state['map_metric']
+map_title  = MAP_TITLES.get(map_metric, '')
 
 METRIC_CONFIG = {
     '% of exports' : ('cost_pct_export', 'CBAM cost as % of CBAM-sector exports', '%.1f%%'),
@@ -650,7 +651,7 @@ METRIC_CONFIG = {
     'Cost / tonne' : ('cost_per_tonne',   'Est. CBAM cost per tonne (€)',          '€%.2f'),
 }
 metric_col, metric_label, metric_fmt = METRIC_CONFIG.get(
-    map_metric, METRIC_CONFIG['% of exports']
+    map_metric, METRIC_CONFIG['Abs. cost']
 )
 
 
@@ -658,6 +659,25 @@ metric_col, metric_label, metric_fmt = METRIC_CONFIG.get(
 col_map, col_bar = st.columns([4, 1.6], gap='small')
 
 with col_map:
+    # Toggle and title inside col_map — aligns naturally with bar chart title
+    # in col_bar since both are the first element in their column.
+    _hdr_title, _hdr_toggle = st.columns([1.5, 1])
+    with _hdr_toggle:
+        _new_metric = st.segmented_control(
+            '_map_metric',
+            options          = ['Abs. cost', 'Cost / tonne', '% of exports'],
+            default          = st.session_state['map_metric'],
+            label_visibility = 'collapsed',
+        )
+        if _new_metric and _new_metric != st.session_state['map_metric']:
+            st.session_state['map_metric'] = _new_metric
+            st.rerun()
+    with _hdr_title:
+        st.markdown(
+            f'<p class="section-label" style="margin-bottom:0.05rem;">{map_title}</p>'
+            f'<p style="font-size:0.62rem; color:{TEXT_LIGHT}; margin:0;">'
+            f'Click to select · click again to deselect</p>',
+            unsafe_allow_html=True)
     df_map = df_c[df_c[metric_col].notna() & (df_c[metric_col] > 0)].copy()
 
     fig_map = px.choropleth(
@@ -705,16 +725,19 @@ with col_map:
             projection_type='natural earth',
         ),
         coloraxis_colorbar = dict(
-            title=metric_label, thickness=10, len=0.6,
-            orientation='h',
-            x=0.5, xanchor='center',
-            y=-0.04, yanchor='top',
-            tickfont=dict(size=9, color=TEXT_MID),
-            title_font=dict(size=9, color=TEXT_MID),
-            title_side='bottom',
+            title=dict(
+                text=metric_label,
+                side='right',
+                font=dict(size=8, color=TEXT_MID),
+            ),
+            thickness=10, len=0.7,
+            orientation='v',
+            x=1.01, xanchor='left',
+            y=0.5,  yanchor='middle',
+            tickfont=dict(size=8, color=TEXT_MID),
         ),
-        margin=dict(l=0, r=0, t=10, b=50),
-        paper_bgcolor=BG, plot_bgcolor=BG, height=420,
+        margin=dict(l=0, r=55, t=10, b=10),
+        paper_bgcolor=BG, plot_bgcolor=BG, height=460,
     )
 
     map_event = st.plotly_chart(
@@ -771,7 +794,7 @@ with col_bar:
         showlegend    = False,
         paper_bgcolor = BG, plot_bgcolor=BG,
         margin        = dict(l=10, r=10, t=10, b=50),
-        height        = 420,
+        height        = 460,
     )
     st.plotly_chart(fig_bar, use_container_width=True, key='bar_chart')
 
