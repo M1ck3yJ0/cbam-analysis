@@ -330,12 +330,21 @@ def load_grid_generation():
 
 @st.cache_data
 def load_cbam_defaults_steel():
-    """CBAM default values for steel EAF and BOF routes, averaged per country."""
+    """CBAM default values for steel EAF and BOF routes, averaged per country.
+
+    production_route_code is stored with parentheses in the DB, e.g. '(C)', '(E)'.
+    The ROUTE_OPTIONS dict uses bare letters as keys for readability. The SQL
+    LIKE pattern handles both formats so the query is robust to either convention.
+    A cleaned bare-letter column is returned so get_default() can match simply.
+    """
     return pd.read_sql("""
-        SELECT country, production_route_code,
-            AVG(default_2026) AS avg_default_2026
+        SELECT
+            country,
+            production_route_code,
+            TRIM(production_route_code, '()') AS route_code,
+            AVG(default_2026)                 AS avg_default_2026
         FROM cbam_defaults
-        WHERE production_route_code IN ('C', 'E', 'F', 'H')
+        WHERE TRIM(production_route_code, '()') IN ('C', 'E', 'F', 'H')
         GROUP BY country, production_route_code
     """, con)
 
@@ -629,11 +638,16 @@ with col_map:
     if selected:
         sel_iso3 = df_countries.loc[df_countries['country'] == selected, 'iso3'].values
         if len(sel_iso3) > 0:
+            # hoverinfo='skip' keeps the main trace tooltip working after click.
+            # Without this, the invisible highlight trace intercepts hover events
+            # and shows a blank tooltip over the selected country.
             fig_map.add_trace(go.Choropleth(
-                locations=[sel_iso3[0]], z=[1],
-                colorscale=[[0, 'rgba(0,0,0,0)'], [1, 'rgba(0,0,0,0)']],
-                showscale=False,
-                marker_line_color=ACCENT_POP, marker_line_width=2.5,
+                locations         = [sel_iso3[0]], z=[1],
+                colorscale        = [[0, 'rgba(0,0,0,0)'], [1, 'rgba(0,0,0,0)']],
+                showscale         = False,
+                marker_line_color = ACCENT_POP,
+                marker_line_width = 2.5,
+                hoverinfo         = 'skip',
             ))
 
     fig_map.update_layout(
@@ -790,14 +804,20 @@ with col_eaf:
     )
     eaf_code, bof_code = ROUTE_OPTIONS[eaf_route_label]
 
-    # Helper: get default_2026 for a route, country-specific or global avg
+    # Helper: get default_2026 for a route, country-specific or global avg.
+    # Matches on the cleaned 'route_code' column (parentheses stripped in SQL).
+    # Returns None if no matching rows exist so the caller can handle gracefully.
     def get_default(route_code, country=None):
-        df = df_defaults_steel[df_defaults_steel['production_route_code'] == route_code]
+        df = df_defaults_steel[df_defaults_steel['route_code'] == route_code]
+        if df.empty:
+            return None
         if country:
             row = df[df['country'] == country]
-            if len(row) > 0:
-                return float(row.iloc[0]['avg_default_2026'])
-        return float(df['avg_default_2026'].mean())
+            if not row.empty:
+                val = float(row.iloc[0]['avg_default_2026'])
+                return val if pd.notna(val) else None
+        global_avg = float(df['avg_default_2026'].mean())
+        return global_avg if pd.notna(global_avg) else None
 
     bof_default = get_default(bof_code, selected)
     eaf_default = get_default(eaf_code, selected)
@@ -814,20 +834,35 @@ with col_eaf:
     def indirect_eur_per_t(grid_intensity):
         return EAF_ELECTRICITY_KWH_PER_T * grid_intensity * 1e-6 * cert_price
 
-    # Four bar values in EUR/t of steel
-    v_bof_default = bof_default * cert_price
-    v_eaf_default = eaf_default * cert_price
+    # Four bar values in EUR/t of steel.
+    # bof_default and eaf_default may be None if the country has no matching
+    # route code in cbam_defaults. Guard each value individually so the
+    # verified EAF bars always render even when defaults are unavailable.
+    v_bof_default = bof_default * cert_price if bof_default is not None else None
+    v_eaf_default = eaf_default * cert_price if eaf_default is not None else None
     v_eaf_current = EAF_DIRECT_EMISSIONS * cert_price + indirect_eur_per_t(current_grid)
     v_eaf_clean   = EAF_DIRECT_EMISSIONS * cert_price + indirect_eur_per_t(CLEAN_GRID_INTENSITY)
 
-    scenarios = [
-        'BOF\nDefault',
-        'EAF\nDefault',
-        f'EAF Verified\n{current_label} grid',
-        f'EAF Verified\n{CLEAN_GRID_COUNTRY} grid',
+    # Build bar list, skipping any scenario where the value is unavailable
+    scenario_defs = [
+        ('BOF\nDefault',                      v_bof_default, BORDER),
+        ('EAF\nDefault',                      v_eaf_default, TEXT_MID),
+        (f'EAF Verified\n{current_label} grid', v_eaf_current, ACCENT),
+        (f'EAF Verified\n{CLEAN_GRID_COUNTRY} grid', v_eaf_clean, ACCENT_MID),
     ]
-    values     = [v_bof_default, v_eaf_default, v_eaf_current, v_eaf_clean]
-    bar_colors = [BORDER, TEXT_MID, ACCENT, ACCENT_MID]
+    scenarios  = [s for s, v, _ in scenario_defs if v is not None]
+    values     = [v for _, v, _ in scenario_defs if v is not None]
+    bar_colors = [c for _, v, c in scenario_defs if v is not None]
+
+    # Show a warning if default route values are missing for this selection
+    missing_defaults = [s for s, v, _ in scenario_defs[:2] if v is None]
+    if missing_defaults:
+        route_name = eaf_route_label.split('(')[0].strip()
+        st.caption(
+            f'No CBAM default available for {route_name} '
+            f'{"for " + selected if selected else "globally"}. '
+            f'Default bars omitted.'
+        )
 
     fig_eaf = go.Figure()
 
@@ -842,16 +877,22 @@ with col_eaf:
         hovertemplate = '<b>%{x}</b><br>€%{y:.2f} per tonne of steel<extra></extra>',
     ))
 
-    # Dashed reference line at EAF default level
-    fig_eaf.add_hline(
-        y                   = v_eaf_default,
-        line_dash           = 'dash',
-        line_color          = TEXT_LIGHT,
-        line_width          = 1,
-        annotation_text     = 'EAF default',
-        annotation_position = 'top right',
-        annotation_font     = dict(size=8, color=TEXT_LIGHT),
-    )
+    # Dashed reference line at EAF default level, only when available
+    if v_eaf_default is not None:
+        fig_eaf.add_hline(
+            y                   = v_eaf_default,
+            line_dash           = 'dash',
+            line_color          = TEXT_LIGHT,
+            line_width          = 1,
+            annotation_text     = 'EAF default',
+            annotation_position = 'top right',
+            annotation_font     = dict(size=8, color=TEXT_LIGHT),
+        )
+
+    # Y-axis range is fixed so the chart does not jump when switching countries.
+    # Floor of 600 EUR/t covers the highest BOF defaults at base price.
+    # Scales up with cert_price if the slider is moved significantly higher.
+    eaf_y_max = max(600, max((v for v in values if v is not None), default=0) * 1.25)
 
     fig_eaf.update_layout(
         xaxis         = dict(tickfont=dict(size=9, color=TEXT_MID),
@@ -859,7 +900,8 @@ with col_eaf:
         yaxis         = dict(title='€ / tonne of steel',
                              title_font=dict(size=9, color=TEXT_MID),
                              tickfont=dict(size=9, color=TEXT_MID),
-                             gridcolor=BORDER, zeroline=False),
+                             gridcolor=BORDER, zeroline=False,
+                             range=[0, eaf_y_max]),
         paper_bgcolor = BG, plot_bgcolor=BG,
         margin        = dict(l=40, r=10, t=40, b=10),
         height        = 280,
@@ -879,71 +921,100 @@ with col_eaf:
         unsafe_allow_html=True)
 
 
-# ── Grid capacity / utilization chart ────────────────────────────────────────
+# ── Grid generation mix chart ────────────────────────────────────────────────
+# Shows each fuel type as a share of total electricity generation (%).
+# Two shaded background regions group fossil and clean fuels visually, so the
+# fossil vs clean balance reads immediately without needing a separate legend.
+# Group total percentages are annotated above each shaded region.
 with col_grid:
-    grid_label = (f'Grid capacity & utilization — {selected}'
-                  if selected else 'Global grid capacity & utilization')
+    grid_label = (f'Grid generation mix — {selected}'
+                  if selected else 'Global grid generation mix')
     st.markdown(f'<p class="section-label">{grid_label}</p>',
                 unsafe_allow_html=True)
 
+    # Aggregate generation by fuel type for the selected country or globally
     if selected:
-        df_cap = df_grid_capacity[df_grid_capacity['country'] == selected].copy()
         df_gen = df_grid_generation[df_grid_generation['country'] == selected].copy()
     else:
-        df_cap = df_grid_capacity.groupby('fuel_type', as_index=False)['value'].sum()
         df_gen = df_grid_generation.groupby('fuel_type', as_index=False)['value'].sum()
 
+    gen_lookup = df_gen.set_index('fuel_type')['value'].to_dict()
+    total_gen  = sum(gen_lookup.get(f, 0) for f in FOSSIL_FUELS + CLEAN_FUELS)
+
+    # Keep only fuels with non-zero generation, preserving fossil-first order
+    fuels    = [f for f in FOSSIL_FUELS + CLEAN_FUELS if gen_lookup.get(f, 0) > 0]
+    pct_vals = [gen_lookup[f] / total_gen * 100 if total_gen else 0 for f in fuels]
+    x_pos    = list(range(len(fuels)))
+
+    fossil_pct = (
+        sum(gen_lookup.get(f, 0) for f in FOSSIL_FUELS) / total_gen * 100
+        if total_gen else 0
+    )
+    clean_pct = 100 - fossil_pct
+
+    # Shaded background rectangles identifying fossil and clean groups.
+    # Drawn on the plot layer below bars using Plotly shapes.
+    shapes, annotations = [], []
+    fossil_idx = [i for i, f in enumerate(fuels) if f in FOSSIL_FUELS]
+    clean_idx  = [i for i, f in enumerate(fuels) if f in CLEAN_FUELS]
+
+    for indices, bg_color, label, grp_pct in [
+        (fossil_idx, '#4a4a4a', 'Fossil', fossil_pct),
+        (clean_idx,  '#3a6b45', 'Clean',  clean_pct),
+    ]:
+        if not indices:
+            continue
+        x0, x1 = indices[0] - 0.45, indices[-1] + 0.45
+        shapes.append(dict(
+            type='rect', layer='below',
+            x0=x0, x1=x1, y0=0, y1=1,
+            xref='x', yref='paper',
+            fillcolor=bg_color, opacity=0.07, line_width=0,
+        ))
+        annotations.append(dict(
+            x=(x0 + x1) / 2, y=1.05,
+            xref='x', yref='paper',
+            text=f'<b>{label}</b> {grp_pct:.0f}%',
+            showarrow=False,
+            font=dict(size=8, color=TEXT_MID),
+            xanchor='center',
+        ))
+
     fig_grid = go.Figure()
-
-    for fuel in FOSSIL_FUELS + CLEAN_FUELS:
-        group   = 'Fossil' if fuel in FOSSIL_FUELS else 'Clean'
-        x_label = f'{group} — {fuel}'
-        cap_val = df_cap[df_cap['fuel_type'] == fuel]['value'].sum()
-        gen_val = df_gen[df_gen['fuel_type'] == fuel]['value'].sum()
-        color   = FUEL_COLORS.get(fuel, '#999')
-
-        if cap_val > 0:
-            fig_grid.add_trace(go.Bar(
-                name          = f'{fuel} capacity',
-                x             = [x_label],
-                y             = [cap_val],
-                marker_color  = color,
-                opacity       = 0.9,
-                legendgroup   = fuel,
-                hovertemplate = f'<b>{fuel}</b><br>Capacity: %{{y:,.1f}} GW<extra></extra>',
-            ))
-        if gen_val > 0:
-            fig_grid.add_trace(go.Bar(
-                name          = f'{fuel} generation',
-                x             = [x_label],
-                y             = [gen_val],
-                marker_color  = color,
-                opacity       = 0.45,
-                legendgroup   = fuel,
-                showlegend    = False,
-                hovertemplate = f'<b>{fuel}</b><br>Generation: %{{y:,.1f}} TWh<extra></extra>',
-            ))
+    fig_grid.add_trace(go.Bar(
+        x                 = x_pos,
+        y                 = pct_vals,
+        marker_color      = [FUEL_COLORS.get(f, '#999') for f in fuels],
+        marker_line_width = 0,
+        text              = [f'{v:.1f}%' if v >= 2 else '' for v in pct_vals],
+        textposition      = 'outside',
+        textfont          = dict(size=8, color=TEXT_MID),
+        customdata        = fuels,
+        hovertemplate     = '<b>%{customdata}</b><br>%{y:.1f}% of generation<extra></extra>',
+    ))
 
     fig_grid.update_layout(
-        barmode       = 'overlay',
-        xaxis         = dict(tickfont=dict(size=8, color=TEXT_MID),
-                             tickangle=-35, gridcolor=BORDER),
-        yaxis         = dict(title='GW / TWh',
-                             title_font=dict(size=9, color=TEXT_MID),
-                             tickfont=dict(size=9, color=TEXT_MID),
-                             gridcolor=BORDER),
-        legend        = dict(font=dict(size=8, color=TEXT_MID),
-                             orientation='h', y=-0.4,
-                             bgcolor='rgba(0,0,0,0)'),
-        paper_bgcolor = BG, plot_bgcolor=BG,
-        margin        = dict(l=40, r=0, t=30, b=90),
+        shapes      = shapes,
+        annotations = annotations,
+        xaxis       = dict(
+            tickvals  = x_pos,
+            ticktext  = fuels,
+            tickfont  = dict(size=8, color=TEXT_MID),
+            tickangle = -30,
+            gridcolor = 'rgba(0,0,0,0)',
+        ),
+        yaxis       = dict(
+            title      = '% of total generation',
+            title_font = dict(size=9, color=TEXT_MID),
+            tickfont   = dict(size=8, color=TEXT_MID),
+            gridcolor  = BORDER,
+            range      = [0, min(max(pct_vals) * 1.3, 105)] if pct_vals else [0, 100],
+        ),
+        paper_bgcolor = BG, plot_bgcolor = BG,
+        margin        = dict(l=40, r=10, t=30, b=65),
         height        = 320,
-        annotations   = [dict(
-            text      = 'Dark bar = installed capacity (GW) · Light bar = generation (TWh)',
-            x=0, y=1.06, xref='paper', yref='paper',
-            showarrow=False,
-            font=dict(size=8, color=TEXT_LIGHT), xanchor='left',
-        )],
+        showlegend    = False,
+        bargap        = 0.35,
     )
 
     st.plotly_chart(fig_grid, use_container_width=True, key='grid_chart')
