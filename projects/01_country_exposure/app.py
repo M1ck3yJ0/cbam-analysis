@@ -5,7 +5,7 @@
 #   Sticky filter bar: certificate price slider, sector pills, country selectbox
 #   5 KPI cards (dynamic, country-specific when selected)
 #   Row 1: Choropleth map + top 10 bar chart (both respond to map metric toggle)
-#   Row 2: Sector donut + EAF scenario placeholder + Grid capacity/utilization
+#   Row 2: Sector donut [1] | EAF scenario chart [2] | Grid capacity/utilization [2]
 #
 # Run from repo root:
 #   streamlit run projects/01_country_exposure/app.py
@@ -47,7 +47,6 @@ SECTOR_COLORS = {
     'Electricity'    : '#d3d1c9',
 }
 
-# Fuel type groupings for grid chart
 FOSSIL_FUELS = ['Coal', 'Gas', 'Other Fossil']
 CLEAN_FUELS  = ['Hydro', 'Wind', 'Solar', 'Nuclear', 'Other Renewables']
 FUEL_COLORS  = {
@@ -59,6 +58,19 @@ FUEL_COLORS  = {
     'Solar'           : '#e9c46a',
     'Nuclear'         : '#a8b5aa',
     'Other Renewables': '#2a9d8f',
+}
+
+# EAF scenario constants
+EAF_ELECTRICITY_KWH_PER_T = 450     # kWh/t crude steel, scrap-EAF (IEA / Transition Asia)
+CLEAN_GRID_INTENSITY       = 29.66  # gCO2/kWh, Norway 2024 (Ember)
+CLEAN_GRID_COUNTRY         = 'Norway'
+EAF_DIRECT_EMISSIONS       = 0.69   # tCO2/t, Worldsteel Scrap-EAF 2024
+BOF_DIRECT_EMISSIONS       = 2.34   # tCO2/t, Worldsteel BF-BOF 2024
+
+# Route dropdown options: label -> (eaf_code, bof_code)
+ROUTE_OPTIONS = {
+    'Carbon Steel (Scrap-EAF vs BF-BOF)'   : ('E', 'C'),
+    'Low Alloy Steel (Scrap-EAF vs BF-BOF)': ('H', 'F'),
 }
 
 # ── Styling ───────────────────────────────────────────────────────────────────
@@ -87,7 +99,6 @@ h1, h2, h3 {{
 [data-testid="collapsedControl"] {{ display: none; }}
 [data-testid="stSidebar"] {{ display: none; }}
 
-/* Sticky filter bar */
 .filter-bar {{
     position: sticky;
     top: 0;
@@ -105,8 +116,6 @@ h1, h2, h3 {{
     color: {TEXT_LIGHT};
     margin-bottom: 0.15rem;
 }}
-
-/* KPI cards */
 .kpi-card {{
     background: {BG_CARD};
     border-radius: 8px;
@@ -154,8 +163,6 @@ h1, h2, h3 {{
     margin-top: 0.2rem;
     line-height: 1.4;
 }}
-
-/* Section labels */
 .section-label {{
     font-size: 0.65rem;
     font-weight: 600;
@@ -165,8 +172,13 @@ h1, h2, h3 {{
     margin-bottom: 0.3rem;
     margin-top: 0.1rem;
 }}
-
-/* Sector pills */
+.method-note {{
+    font-size: 0.62rem;
+    color: {TEXT_LIGHT};
+    margin-top: 0.3rem;
+    line-height: 1.4;
+    font-style: italic;
+}}
 [data-testid="stPills"] button {{
     font-size: 0.72rem !important;
     padding: 2px 10px !important;
@@ -185,8 +197,6 @@ h1, h2, h3 {{
     border-color: {ACCENT} !important;
     color: {ACCENT} !important;
 }}
-
-/* Clear + map toggle buttons */
 [data-testid="stButton"] button {{
     font-size: 0.72rem !important;
     padding: 2px 8px !important;
@@ -196,24 +206,6 @@ h1, h2, h3 {{
     color: {TEXT_MID} !important;
     border-radius: 4px !important;
 }}
-
-/* Placeholder box */
-.placeholder-box {{
-    background: {BG_CARD};
-    border: 1px dashed {BORDER};
-    border-radius: 8px;
-    padding: 2rem 1rem;
-    text-align: center;
-    color: {TEXT_LIGHT};
-    font-size: 0.82rem;
-    height: 280px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-}}
-
 [data-testid="stSlider"] {{ padding-top: 0.1rem; padding-bottom: 0; }}
 [data-testid="stDataFrame"] {{ border-radius: 6px; overflow: hidden; }}
 </style>
@@ -227,6 +219,7 @@ BASE_PRICE = 75.36
 # ── Database connection ───────────────────────────────────────────────────────
 @st.cache_resource
 def get_connection():
+    """Return a persistent cached SQLite connection."""
     db_path = Path(__file__).parent.parent.parent / 'db' / 'cbam.db'
     assert db_path.exists(), f'Database not found at {db_path.resolve()}.'
     return sqlite3.connect(db_path, check_same_thread=False)
@@ -237,6 +230,7 @@ con = get_connection()
 # ── Data loading ──────────────────────────────────────────────────────────────
 @st.cache_data
 def load_country_data():
+    """Country-level aggregated costs joined with iso3 from crosswalk."""
     return pd.read_sql("""
         SELECT c.country, c.iso2, cw.iso3,
             c.total_import_tonnes,
@@ -244,8 +238,6 @@ def load_country_data():
             c.total_embedded_co2_high      AS embedded_co2_high,
             c.total_cbam_cost_high_route   AS cost_high,
             c.total_cbam_cost_low_route    AS cost_low,
-            c.cbam_cost_pct_of_export_value_high AS cost_pct_export_high,
-            c.cbam_cost_per_tonne_high     AS cost_per_tonne_high,
             c.has_any_route_variation
         FROM cbam_cost_by_country c
         LEFT JOIN country_crosswalk cw ON c.country = cw.country
@@ -254,6 +246,7 @@ def load_country_data():
 
 @st.cache_data
 def load_granular_data():
+    """Granular country x sector x CN code cost data."""
     return pd.read_sql("""
         SELECT country, sector, has_route_variation,
             import_tonnes, import_value_eur,
@@ -265,6 +258,7 @@ def load_granular_data():
 
 @st.cache_data
 def load_global_exports():
+    """Total global exports per country from Comtrade."""
     return pd.read_sql("""
         SELECT country,
             SUM(export_value_eur) AS total_export_value_eur,
@@ -275,6 +269,7 @@ def load_global_exports():
 
 @st.cache_data
 def load_grid_intensity():
+    """Latest grid CO2 intensity per country from Ember."""
     return pd.read_sql("""
         SELECT country, year, co2_intensity_gco2_kwh
         FROM grid_co2_intensity
@@ -283,6 +278,7 @@ def load_grid_intensity():
 
 @st.cache_data
 def load_grid_capacity():
+    """Latest installed capacity by fuel type."""
     return pd.read_sql("""
         SELECT country, year, fuel_type, subcategory, value, unit
         FROM grid_capacity
@@ -292,6 +288,7 @@ def load_grid_capacity():
 
 @st.cache_data
 def load_grid_generation():
+    """Latest electricity generation by fuel type."""
     return pd.read_sql("""
         SELECT country, year, fuel_type, subcategory, value, unit
         FROM grid_generation
@@ -299,23 +296,32 @@ def load_grid_generation():
           AND subcategory = 'Fuel'
     """, con)
 
-df_countries      = load_country_data()
-df_granular       = load_granular_data()
-df_global_exports = load_global_exports()
-df_grid_intensity = load_grid_intensity()
-df_grid_capacity  = load_grid_capacity()
-df_grid_generation= load_grid_generation()
-ALL_SECTORS       = sorted(df_granular['sector'].unique().tolist())
+@st.cache_data
+def load_cbam_defaults_steel():
+    """CBAM default values for steel EAF and BOF routes, averaged per country."""
+    return pd.read_sql("""
+        SELECT country, production_route_code,
+            AVG(default_2026) AS avg_default_2026
+        FROM cbam_defaults
+        WHERE production_route_code IN ('C', 'E', 'F', 'H')
+        GROUP BY country, production_route_code
+    """, con)
 
-# Global grid avg
+df_countries        = load_country_data()
+df_granular         = load_granular_data()
+df_global_exports   = load_global_exports()
+df_grid_intensity   = load_grid_intensity()
+df_grid_capacity    = load_grid_capacity()
+df_grid_generation  = load_grid_generation()
+df_defaults_steel   = load_cbam_defaults_steel()
+ALL_SECTORS         = sorted(df_granular['sector'].unique().tolist())
+
 global_grid_avg = df_grid_intensity['co2_intensity_gco2_kwh'].mean()
 
 
 # ── Session state ─────────────────────────────────────────────────────────────
 if 'selected_country' not in st.session_state:
     st.session_state['selected_country'] = None
-if 'map_metric' not in st.session_state:
-    st.session_state['map_metric'] = 'pct_export'
 
 
 # ── Sticky filter bar ─────────────────────────────────────────────────────────
@@ -393,47 +399,40 @@ df_c = df_c.merge(
 df_c['cost_pct_export'] = (
     df_c['cost_high'] / df_c['import_value_eur'].replace(0, float('nan')) * 100
 ).round(2)
-
 df_c['cost_per_tonne'] = (
     df_c['cost_high'] / df_c['import_tonnes'].replace(0, float('nan'))
 ).round(2)
 
-# Global headline numbers
 total_cost_high   = df_c['cost_high'].sum()
 total_cost_low    = df_c['cost_low'].sum()
 total_co2         = df_g['co2_high'].sum()
 total_eu_imports  = df_c['import_value_eur'].sum()
-total_eu_tonnes   = df_c['import_tonnes'].sum()
 total_global_exp  = df_global_exports['total_export_value_eur'].sum()
 global_pct_export = (total_eu_imports / total_global_exp * 100) if total_global_exp else None
 n_exposed         = (df_c['cost_high'] > 0).sum()
-
-# Top 3 countries share
-top3_cost  = df_c.head(3)['cost_high'].sum()
-top3_share = top3_cost / total_cost_high * 100 if total_cost_high else 0
-top3_names = ', '.join(df_c.head(3)['country'].tolist())
+top3_cost         = df_c.head(3)['cost_high'].sum()
+top3_share        = top3_cost / total_cost_high * 100 if total_cost_high else 0
+top3_names        = ', '.join(df_c.head(3)['country'].tolist())
 
 selected = st.session_state['selected_country']
 
-# Country-specific metrics
 sel_cost = sel_co2 = sel_pct = sel_eu_imp = sel_total_exp = sel_grid = sel_rank = None
 if selected:
     sel_row = df_c[df_c['country'] == selected]
     if len(sel_row) > 0:
-        s            = sel_row.iloc[0]
-        sel_cost     = s['cost_high']
-        sel_co2      = s['co2_high']
-        sel_pct      = s['cost_pct_export']
-        sel_eu_imp   = s['import_value_eur']
-        sel_total_exp= s['total_export_value_eur']
-        sel_grid     = s['co2_intensity_gco2_kwh']
-        sel_rank     = int(sel_row.index[0]) + 1
+        s             = sel_row.iloc[0]
+        sel_cost      = s['cost_high']
+        sel_co2       = s['co2_high']
+        sel_pct       = s['cost_pct_export']
+        sel_eu_imp    = s['import_value_eur']
+        sel_total_exp = s['total_export_value_eur']
+        sel_grid      = s['co2_intensity_gco2_kwh']
+        sel_rank      = int(sel_row.index[0]) + 1
 
 
 # ── KPI cards (5) ─────────────────────────────────────────────────────────────
 k1, k2, k3, k4, k5 = st.columns(5)
 
-# Card 1: total CBAM bill / country bill
 with k1:
     if selected and sel_cost is not None:
         st.markdown(
@@ -441,40 +440,36 @@ with k1:
             f'<div class="kpi-label">Est. CBAM Bill — {selected}</div>'
             f'<div class="kpi-value">€{sel_cost/1e6:.1f}M</div>'
             f'<div class="kpi-sub">{sel_co2/1e6:.2f} MtCO₂ embedded</div>'
-            f'</div>', unsafe_allow_html=True
-        )
+            f'</div>', unsafe_allow_html=True)
     else:
         st.markdown(
             f'<div class="kpi-card">'
             f'<div class="kpi-label">Total Est. CBAM Bill</div>'
             f'<div class="kpi-value">€{total_cost_high/1e9:.2f}B</div>'
             f'<div class="kpi-sub">{total_co2/1e6:.1f} MtCO₂ embedded</div>'
-            f'</div>', unsafe_allow_html=True
-        )
+            f'</div>', unsafe_allow_html=True)
 
-# Card 2: % exports exposed / country pct
 with k2:
     if selected and sel_pct is not None and pd.notna(sel_pct):
         eu_str  = f'EU imports: €{sel_eu_imp/1e9:.2f}B' if sel_eu_imp else ''
-        tot_str = f'Total exports: €{sel_total_exp/1e9:.2f}B' if sel_total_exp and pd.notna(sel_total_exp) else ''
+        tot_str = (f'Total exports: €{sel_total_exp/1e9:.2f}B'
+                   if sel_total_exp and pd.notna(sel_total_exp) else '')
         st.markdown(
             f'<div class="kpi-card-country">'
             f'<div class="kpi-label">CBAM Cost as % of Exports — {selected}</div>'
             f'<div class="kpi-value">{sel_pct:.1f}%</div>'
             f'<div class="kpi-sub">{eu_str}<br>{tot_str}</div>'
-            f'</div>', unsafe_allow_html=True
-        )
+            f'</div>', unsafe_allow_html=True)
     else:
         pct_str = f'{global_pct_export:.1f}%' if global_pct_export else 'N/A'
         st.markdown(
             f'<div class="kpi-card">'
             f'<div class="kpi-label">CBAM-Sector Exports Reaching EU</div>'
             f'<div class="kpi-value">{pct_str}</div>'
-            f'<div class="kpi-sub">Total: €{total_global_exp/1e9:.1f}B · EU: €{total_eu_imports/1e9:.1f}B</div>'
-            f'</div>', unsafe_allow_html=True
-        )
+            f'<div class="kpi-sub">Total: €{total_global_exp/1e9:.1f}B'
+            f' · EU: €{total_eu_imports/1e9:.1f}B</div>'
+            f'</div>', unsafe_allow_html=True)
 
-# Card 3: global top 3 share / country rank share
 with k3:
     if selected and sel_cost is not None:
         country_share = sel_cost / total_cost_high * 100
@@ -483,18 +478,15 @@ with k3:
             f'<div class="kpi-label">Share of Global CBAM Bill — {selected}</div>'
             f'<div class="kpi-value">{country_share:.1f}%</div>'
             f'<div class="kpi-sub">Ranked #{sel_rank} globally</div>'
-            f'</div>', unsafe_allow_html=True
-        )
+            f'</div>', unsafe_allow_html=True)
     else:
         st.markdown(
             f'<div class="kpi-card">'
             f'<div class="kpi-label">Top 3 Countries — Share of Global Bill</div>'
             f'<div class="kpi-value">{top3_share:.0f}%</div>'
             f'<div class="kpi-sub">{top3_names}</div>'
-            f'</div>', unsafe_allow_html=True
-        )
+            f'</div>', unsafe_allow_html=True)
 
-# Card 4: grid intensity
 with k4:
     if selected and sel_grid is not None and pd.notna(sel_grid):
         diff     = sel_grid - global_grid_avg
@@ -504,31 +496,27 @@ with k4:
             f'<div class="kpi-label">Grid Intensity — {selected}</div>'
             f'<div class="kpi-value">{sel_grid:.0f} gCO₂/kWh</div>'
             f'<div class="kpi-sub">{diff_str}</div>'
-            f'</div>', unsafe_allow_html=True
-        )
+            f'</div>', unsafe_allow_html=True)
     else:
         st.markdown(
             f'<div class="kpi-card">'
             f'<div class="kpi-label">Global Avg Grid Intensity</div>'
             f'<div class="kpi-value">{global_grid_avg:.0f} gCO₂/kWh</div>'
             f'<div class="kpi-sub">Source: Ember latest year</div>'
-            f'</div>', unsafe_allow_html=True
-        )
+            f'</div>', unsafe_allow_html=True)
 
-# Card 5: placeholder
 with k5:
     st.markdown(
         f'<div class="kpi-card-neutral">'
         f'<div class="kpi-label">EAF + Clean Grid Potential</div>'
         f'<div class="kpi-value">—</div>'
         f'<div class="kpi-sub">Estimated CO₂ reduction vs current.<br>Coming soon.</div>'
-        f'</div>', unsafe_allow_html=True
-    )
+        f'</div>', unsafe_allow_html=True)
 
 st.markdown('<br>', unsafe_allow_html=True)
 
 
-# ── Map metric toggle ─────────────────────────────────────────────────────────
+# ── Map metric toggle + clear button ──────────────────────────────────────────
 map_label_col, toggle_col, clear_col = st.columns([3, 2, 2])
 
 with map_label_col:
@@ -538,8 +526,8 @@ with map_label_col:
 with toggle_col:
     map_metric = st.segmented_control(
         '_map_metric',
-        options        = ['% of exports', 'Abs. cost', 'Cost / tonne'],
-        default        = '% of exports',
+        options          = ['% of exports', 'Abs. cost', 'Cost / tonne'],
+        default          = '% of exports',
         label_visibility = 'collapsed',
     )
 
@@ -552,11 +540,10 @@ with clear_col:
     else:
         st.empty()
 
-# Map metric config
 METRIC_CONFIG = {
-    '% of exports' : ('cost_pct_export',  'CBAM cost as % of exports',    '%.1f%%'),
-    'Abs. cost'    : ('cost_high',         'Est. CBAM cost (€)',            '€%.0f'),
-    'Cost / tonne' : ('cost_per_tonne',    'Est. CBAM cost per tonne (€)',  '€%.2f'),
+    '% of exports' : ('cost_pct_export', 'CBAM cost as % of exports',   '%.1f%%'),
+    'Abs. cost'    : ('cost_high',        'Est. CBAM cost (€)',           '€%.0f'),
+    'Cost / tonne' : ('cost_per_tonne',   'Est. CBAM cost per tonne (€)', '€%.2f'),
 }
 metric_col, metric_label, metric_fmt = METRIC_CONFIG.get(
     map_metric, METRIC_CONFIG['% of exports']
@@ -574,11 +561,7 @@ with col_map:
         locations              = 'iso3',
         color                  = metric_col,
         hover_name             = 'country',
-        hover_data             = {
-            'iso3'       : False,
-            metric_col   : True,
-            'cost_high'  : ':,.0f',
-        },
+        hover_data             = {'iso3': False, metric_col: True, 'cost_high': ':,.0f'},
         color_continuous_scale = [
             [0.0, MAP_MIN], [0.2, '#bdc4bc'], [0.4, '#a0b6a4'],
             [0.6, '#7a9e86'], [0.8, '#52815d'], [1.0, MAP_MAX],
@@ -594,12 +577,10 @@ with col_map:
         sel_iso3 = df_countries.loc[df_countries['country'] == selected, 'iso3'].values
         if len(sel_iso3) > 0:
             fig_map.add_trace(go.Choropleth(
-                locations         = [sel_iso3[0]],
-                z                 = [1],
-                colorscale        = [[0, 'rgba(0,0,0,0)'], [1, 'rgba(0,0,0,0)']],
-                showscale         = False,
-                marker_line_color = ACCENT_POP,
-                marker_line_width = 2.5,
+                locations=[sel_iso3[0]], z=[1],
+                colorscale=[[0, 'rgba(0,0,0,0)'], [1, 'rgba(0,0,0,0)']],
+                showscale=False,
+                marker_line_color=ACCENT_POP, marker_line_width=2.5,
             ))
 
     fig_map.update_layout(
@@ -615,10 +596,8 @@ with col_map:
             tickfont=dict(size=9, color=TEXT_MID),
             title_font=dict(size=9, color=TEXT_MID),
         ),
-        margin        = dict(l=0, r=60, t=0, b=0),
-        paper_bgcolor = BG,
-        plot_bgcolor  = BG,
-        height        = 380,
+        margin=dict(l=0, r=60, t=0, b=0),
+        paper_bgcolor=BG, plot_bgcolor=BG, height=380,
     )
 
     map_event = st.plotly_chart(
@@ -640,7 +619,6 @@ with col_map:
                         st.rerun()
 
 with col_bar:
-    # Top 10 bar — metric matches map toggle
     bar_label = {
         '% of exports' : 'CBAM cost as % of exports',
         'Abs. cost'    : 'Estimated CBAM cost (€)',
@@ -649,8 +627,7 @@ with col_bar:
 
     st.markdown(
         f'<p class="section-label">Top 10 countries — {bar_label.lower()}</p>',
-        unsafe_allow_html=True
-    )
+        unsafe_allow_html=True)
 
     df_top10 = (
         df_c[df_c[metric_col].notna() & (df_c[metric_col] > 0)]
@@ -661,44 +638,35 @@ with col_bar:
         y             = df_top10['country'].tolist(),
         x             = df_top10[metric_col].tolist(),
         orientation   = 'h',
-        marker_color  = [
-            ACCENT_POP if c == selected else ACCENT
-            for c in df_top10['country']
-        ],
+        marker_color  = [ACCENT_POP if c == selected else ACCENT
+                         for c in df_top10['country']],
         hovertemplate = '<b>%{y}</b><br>' + bar_label + ': %{x:,.2f}<extra></extra>',
     ))
 
-    tick_fmt = '.1%' if metric_col == 'cost_pct_export' else '.2s'
-
     fig_bar.update_layout(
-        yaxis         = dict(
-            autorange  = 'reversed',
-            tickfont   = dict(size=10, family='DM Sans', color=TEXT_DARK),
-            gridcolor  = BORDER, automargin=True,
-        ),
-        xaxis         = dict(
-            title      = bar_label,
-            tickfont   = dict(size=9, color=TEXT_MID),
-            gridcolor  = BORDER,
-            tickformat = '.2s',
-            title_font = dict(size=10, color=TEXT_MID),
-        ),
+        yaxis         = dict(autorange='reversed',
+                             tickfont=dict(size=10, family='DM Sans', color=TEXT_DARK),
+                             gridcolor=BORDER, automargin=True),
+        xaxis         = dict(title=bar_label,
+                             tickfont=dict(size=9, color=TEXT_MID),
+                             gridcolor=BORDER, tickformat='.2s',
+                             title_font=dict(size=10, color=TEXT_MID)),
         showlegend    = False,
-        paper_bgcolor = BG,
-        plot_bgcolor  = BG,
+        paper_bgcolor = BG, plot_bgcolor=BG,
         margin        = dict(l=10, r=10, t=10, b=50),
         height        = 380,
     )
-
     st.plotly_chart(fig_bar, use_container_width=True, key='bar_chart')
 
 
 st.markdown('<br>', unsafe_allow_html=True)
 
 
-# ── Row 2: Sector donut + EAF placeholder + Grid capacity/utilization ─────────
-col_donut, col_eaf, col_grid = st.columns([1, 1, 1.4], gap='large')
+# ── Row 2: Sector donut [1] | EAF chart [2] | Grid chart [2] ─────────────────
+col_donut, col_eaf, col_grid = st.columns([1, 2, 2], gap='large')
 
+
+# ── Sector donut ──────────────────────────────────────────────────────────────
 with col_donut:
     donut_label = f'Cost by sector — {selected}' if selected else 'Global cost by sector'
     st.markdown(f'<p class="section-label">{donut_label}</p>',
@@ -725,35 +693,127 @@ with col_donut:
                              orientation='v', x=1.0),
         margin        = dict(l=0, r=90, t=10, b=0),
         paper_bgcolor = BG,
-        height        = 280,
+        height        = 320,
     )
     st.plotly_chart(fig_donut, use_container_width=True, key='donut_chart')
 
 
+# ── EAF scenario chart ────────────────────────────────────────────────────────
 with col_eaf:
-    st.markdown('<p class="section-label">EAF grid scenario — coming soon</p>',
-                unsafe_allow_html=True)
+    context_label = selected if selected else 'global avg'
     st.markdown(
-        f'<div class="placeholder-box">'
-        f'⚡<br><br>'
-        f'<strong>EAF Indirect Cost by Grid Scenario</strong><br><br>'
-        f'Cleanest grid · Dirtiest grid · '
-        f'{"Selected country" if selected else "Global avg"}'
-        f'<br><br><em>Placeholder — coming soon</em>'
-        f'</div>',
-        unsafe_allow_html=True
+        f'<p class="section-label">Steel CBAM cost per tonne — '
+        f'default vs verified · {context_label}</p>',
+        unsafe_allow_html=True)
+
+    # Route dropdown — above the chart, full width of this column
+    eaf_route_label = st.selectbox(
+        'Steel grade',
+        options = list(ROUTE_OPTIONS.keys()),
+        index   = 0,
+    )
+    eaf_code, bof_code = ROUTE_OPTIONS[eaf_route_label]
+
+    # Helper: get default_2026 for a route, country-specific or global avg
+    def get_default(route_code, country=None):
+        df = df_defaults_steel[df_defaults_steel['production_route_code'] == route_code]
+        if country:
+            row = df[df['country'] == country]
+            if len(row) > 0:
+                return float(row.iloc[0]['avg_default_2026'])
+        return float(df['avg_default_2026'].mean())
+
+    bof_default = get_default(bof_code, selected)
+    eaf_default = get_default(eaf_code, selected)
+
+    # Grid intensity for current scenario bar
+    if selected and sel_grid is not None and pd.notna(sel_grid):
+        current_grid  = sel_grid
+        current_label = f'{selected}'
+    else:
+        current_grid  = global_grid_avg
+        current_label = 'Global avg'
+
+    # Indirect EAF cost: kWh/t × gCO2/kWh × 1e-6 × €/tCO2 = €/t steel
+    def indirect_eur_per_t(grid_intensity):
+        return EAF_ELECTRICITY_KWH_PER_T * grid_intensity * 1e-6 * cert_price
+
+    # Four bar values in €/t of steel
+    v_bof_default      = bof_default * cert_price
+    v_eaf_default      = eaf_default * cert_price
+    v_eaf_current      = (EAF_DIRECT_EMISSIONS + indirect_eur_per_t(current_grid) / cert_price) * cert_price
+    v_eaf_clean        = (EAF_DIRECT_EMISSIONS + indirect_eur_per_t(CLEAN_GRID_INTENSITY) / cert_price) * cert_price
+
+    # Fix: indirect_eur_per_t already returns €/t, don't divide by cert_price again
+    v_eaf_current = EAF_DIRECT_EMISSIONS * cert_price + indirect_eur_per_t(current_grid)
+    v_eaf_clean   = EAF_DIRECT_EMISSIONS * cert_price + indirect_eur_per_t(CLEAN_GRID_INTENSITY)
+
+    scenarios = [
+        'BOF\nDefault',
+        'EAF\nDefault',
+        f'EAF Verified\n{current_label} grid',
+        f'EAF Verified\n{CLEAN_GRID_COUNTRY} grid',
+    ]
+    values      = [v_bof_default, v_eaf_default, v_eaf_current, v_eaf_clean]
+    bar_colors  = [BORDER, TEXT_MID, ACCENT, ACCENT_MID]
+
+    fig_eaf = go.Figure()
+
+    fig_eaf.add_trace(go.Bar(
+        x             = scenarios,
+        y             = values,
+        marker_color  = bar_colors,
+        marker_line_width = 0,
+        text          = [f'€{v:.1f}' for v in values],
+        textposition  = 'outside',
+        textfont      = dict(size=9, color=TEXT_MID),
+        hovertemplate = '<b>%{x}</b><br>€%{y:.2f} per tonne of steel<extra></extra>',
+    ))
+
+    # Dashed reference line at EAF default level
+    fig_eaf.add_hline(
+        y                   = v_eaf_default,
+        line_dash           = 'dash',
+        line_color          = TEXT_LIGHT,
+        line_width          = 1,
+        annotation_text     = 'EAF default',
+        annotation_position = 'top right',
+        annotation_font     = dict(size=8, color=TEXT_LIGHT),
     )
 
+    fig_eaf.update_layout(
+        xaxis         = dict(tickfont=dict(size=9, color=TEXT_MID),
+                             gridcolor=BORDER),
+        yaxis         = dict(title='€ / tonne of steel',
+                             title_font=dict(size=9, color=TEXT_MID),
+                             tickfont=dict(size=9, color=TEXT_MID),
+                             gridcolor=BORDER, zeroline=False),
+        paper_bgcolor = BG, plot_bgcolor=BG,
+        margin        = dict(l=40, r=10, t=40, b=10),
+        height        = 280,
+        showlegend    = False,
+    )
 
+    st.plotly_chart(fig_eaf, use_container_width=True, key='eaf_chart')
+
+    st.markdown(
+        f'<p class="method-note">'
+        f'Default bars use EU CBAM default values × certificate price. '
+        f'Verified EAF bars use Worldsteel Scrap-EAF direct emissions '
+        f'(0.69 tCO₂/t) + indirect ({EAF_ELECTRICITY_KWH_PER_T} kWh/t × grid intensity). '
+        f'No markup on verified submissions. '
+        f'Clean grid: {CLEAN_GRID_COUNTRY} {CLEAN_GRID_INTENSITY} gCO₂/kWh (Ember 2024).'
+        f'</p>',
+        unsafe_allow_html=True)
+
+
+# ── Grid capacity / utilization chart ────────────────────────────────────────
 with col_grid:
-    grid_label = (
-        f'Grid capacity & utilization — {selected}'
-        if selected else 'Global grid capacity & utilization'
-    )
+    grid_label = (f'Grid capacity & utilization — {selected}'
+                  if selected else 'Global grid capacity & utilization')
     st.markdown(f'<p class="section-label">{grid_label}</p>',
                 unsafe_allow_html=True)
 
-    # Filter grid data for selected country or global aggregate
     if selected:
         df_cap = df_grid_capacity[df_grid_capacity['country'] == selected].copy()
         df_gen = df_grid_generation[df_grid_generation['country'] == selected].copy()
@@ -761,105 +821,64 @@ with col_grid:
         df_cap = df_grid_capacity.groupby('fuel_type', as_index=False)['value'].sum()
         df_gen = df_grid_generation.groupby('fuel_type', as_index=False)['value'].sum()
 
-    # Aggregate into fossil and clean groups with sub-fuel breakdown
-    def group_fuels(df, value_col='value'):
-        fossil = df[df['fuel_type'].isin(FOSSIL_FUELS)].copy()
-        clean  = df[df['fuel_type'].isin(CLEAN_FUELS)].copy()
-        return fossil, clean
-
-    cap_fossil, cap_clean = group_fuels(df_cap)
-    gen_fossil, gen_clean = group_fuels(df_gen)
-
     fig_grid = go.Figure()
 
-    # Capacity bars by fuel type, grouped as fossil/clean
-    for fuel in FOSSIL_FUELS:
-        cap_val = cap_fossil[cap_fossil['fuel_type'] == fuel]['value'].sum()
-        gen_val = gen_fossil[gen_fossil['fuel_type'] == fuel]['value'].sum() if len(gen_fossil) else 0
-        if cap_val > 0:
-            fig_grid.add_trace(go.Bar(
-                name         = f'{fuel} (capacity)',
-                x            = [f'Fossil — {fuel}'],
-                y            = [cap_val],
-                marker_color = FUEL_COLORS.get(fuel, '#999'),
-                opacity      = 0.9,
-                hovertemplate = f'<b>{fuel}</b><br>Capacity: %{{y:,.1f}}<extra></extra>',
-                legendgroup  = fuel,
-            ))
-            if gen_val > 0:
-                fig_grid.add_trace(go.Bar(
-                    name         = f'{fuel} (generation)',
-                    x            = [f'Fossil — {fuel}'],
-                    y            = [gen_val],
-                    marker_color = FUEL_COLORS.get(fuel, '#999'),
-                    opacity      = 0.5,
-                    hovertemplate = f'<b>{fuel}</b><br>Generation: %{{y:,.1f}}<extra></extra>',
-                    legendgroup  = fuel,
-                    showlegend   = False,
-                ))
+    for fuel in FOSSIL_FUELS + CLEAN_FUELS:
+        group   = 'Fossil' if fuel in FOSSIL_FUELS else 'Clean'
+        x_label = f'{group} — {fuel}'
+        cap_val = df_cap[df_cap['fuel_type'] == fuel]['value'].sum()
+        gen_val = df_gen[df_gen['fuel_type'] == fuel]['value'].sum()
+        color   = FUEL_COLORS.get(fuel, '#999')
 
-    for fuel in CLEAN_FUELS:
-        cap_val = cap_clean[cap_clean['fuel_type'] == fuel]['value'].sum()
-        gen_val = gen_clean[gen_clean['fuel_type'] == fuel]['value'].sum() if len(gen_clean) else 0
         if cap_val > 0:
             fig_grid.add_trace(go.Bar(
-                name         = f'{fuel} (capacity)',
-                x            = [f'Clean — {fuel}'],
-                y            = [cap_val],
-                marker_color = FUEL_COLORS.get(fuel, '#74b583'),
-                opacity      = 0.9,
-                hovertemplate = f'<b>{fuel}</b><br>Capacity: %{{y:,.1f}}<extra></extra>',
-                legendgroup  = fuel,
+                name          = f'{fuel} capacity',
+                x             = [x_label],
+                y             = [cap_val],
+                marker_color  = color,
+                opacity       = 0.9,
+                legendgroup   = fuel,
+                hovertemplate = f'<b>{fuel}</b><br>Capacity: %{{y:,.1f}} GW<extra></extra>',
             ))
-            if gen_val > 0:
-                fig_grid.add_trace(go.Bar(
-                    name         = f'{fuel} (generation)',
-                    x            = [f'Clean — {fuel}'],
-                    y            = [gen_val],
-                    marker_color = FUEL_COLORS.get(fuel, '#74b583'),
-                    opacity      = 0.5,
-                    hovertemplate = f'<b>{fuel}</b><br>Generation: %{{y:,.1f}}<extra></extra>',
-                    legendgroup  = fuel,
-                    showlegend   = False,
-                ))
+        if gen_val > 0:
+            fig_grid.add_trace(go.Bar(
+                name          = f'{fuel} generation',
+                x             = [x_label],
+                y             = [gen_val],
+                marker_color  = color,
+                opacity       = 0.45,
+                legendgroup   = fuel,
+                showlegend    = False,
+                hovertemplate = f'<b>{fuel}</b><br>Generation: %{{y:,.1f}} TWh<extra></extra>',
+            ))
 
     fig_grid.update_layout(
         barmode       = 'overlay',
-        xaxis         = dict(
-            tickfont  = dict(size=8, color=TEXT_MID),
-            tickangle = -30,
-            gridcolor = BORDER,
-        ),
-        yaxis         = dict(
-            title      = 'GW / TWh',
-            title_font = dict(size=9, color=TEXT_MID),
-            tickfont   = dict(size=9, color=TEXT_MID),
-            gridcolor  = BORDER,
-        ),
-        legend        = dict(
-            font        = dict(size=8, color=TEXT_MID),
-            orientation = 'h',
-            y           = -0.35,
-            bgcolor     = 'rgba(0,0,0,0)',
-        ),
-        paper_bgcolor = BG,
-        plot_bgcolor  = BG,
-        margin        = dict(l=30, r=0, t=10, b=80),
-        height        = 280,
+        xaxis         = dict(tickfont=dict(size=8, color=TEXT_MID),
+                             tickangle=-35, gridcolor=BORDER),
+        yaxis         = dict(title='GW / TWh',
+                             title_font=dict(size=9, color=TEXT_MID),
+                             tickfont=dict(size=9, color=TEXT_MID),
+                             gridcolor=BORDER),
+        legend        = dict(font=dict(size=8, color=TEXT_MID),
+                             orientation='h', y=-0.4,
+                             bgcolor='rgba(0,0,0,0)'),
+        paper_bgcolor = BG, plot_bgcolor=BG,
+        margin        = dict(l=40, r=0, t=30, b=90),
+        height        = 320,
         annotations   = [dict(
-            text      = 'Dark bar = capacity · Light bar = generation',
-            x         = 0, y = 1.04,
-            xref      = 'paper', yref = 'paper',
-            showarrow = False,
-            font      = dict(size=8, color=TEXT_LIGHT),
-            xanchor   = 'left',
+            text      = 'Dark bar = installed capacity (GW) · Light bar = generation (TWh)',
+            x=0, y=1.06, xref='paper', yref='paper',
+            showarrow=False,
+            font=dict(size=8, color=TEXT_LIGHT), xanchor='left',
         )],
     )
 
     st.plotly_chart(fig_grid, use_container_width=True, key='grid_chart')
 
+
 st.markdown('<br>', unsafe_allow_html=True)
 st.caption(
     'Sources: EU Commission · Eurostat COMEXT · Worldsteel · UN Comtrade · Ember · '
-    f'Certificate price: €{BASE_PRICE}/tCO₂ (EC, April 2026)'
+    f'Certificate price: €{cert_price}/tCO₂'
 )
