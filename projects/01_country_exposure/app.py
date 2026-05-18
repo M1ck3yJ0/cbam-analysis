@@ -112,6 +112,9 @@ h1, h2, h3 {{
     padding: 0.9rem 0 0.75rem 0;
     margin-bottom: 1.25rem;
 }}
+.streamlit-expanderContent {{
+    padding: 0.5rem 2rem 0.7rem 2rem !important;
+}}
 .filter-label {{
     font-size: 0.65rem;
     font-weight: 600;
@@ -392,36 +395,79 @@ st.markdown(
     f'</div></div>',
     unsafe_allow_html=True)
 
-fc1, _gap, fc2, fc3 = st.columns([1.5, 0.4, 4, 1.5])
+# ── Filter state initialisation ──────────────────────────────────────────────
+# Each widget uses a dedicated key so Streamlit owns the value directly.
+# This eliminates the double-interaction bug that occurs when both value=
+# and manual session_state writes are used together.
+# filters_open persists the expander state across reruns so interactions
+# inside the expander do not cause it to collapse.
+if 'filter_cert_price' not in st.session_state:
+    st.session_state['filter_cert_price'] = BASE_PRICE
+if 'filter_sectors' not in st.session_state:
+    st.session_state['filter_sectors'] = ALL_SECTORS
+if 'filters_open' not in st.session_state:
+    st.session_state['filters_open'] = False
 
-with fc1:
-    cert_price = st.slider(
-        '_cert', min_value=25.0, max_value=150.0,
-        value=BASE_PRICE, step=0.5, format='€%.2f',
-        label_visibility='collapsed',
-        help=f'Default: €{BASE_PRICE} — first official EC CBAM price, April 2026',
-    )
+def _keep_open():
+    st.session_state['filters_open'] = True
 
-with fc2:
-    selected_sectors = st.pills(
-        '_sectors', options=ALL_SECTORS, default=ALL_SECTORS,
-        selection_mode='multi', label_visibility='collapsed',
-    )
-    if not selected_sectors:
-        selected_sectors = ALL_SECTORS
+def _reset_filters():
+    st.session_state['filter_cert_price'] = BASE_PRICE
+    st.session_state['filter_sectors']    = ALL_SECTORS
+    st.session_state['selected_country']  = None
+    st.session_state['filters_open']      = True
 
-with fc3:
-    country_options = ['All countries'] + sorted(df_countries['country'].tolist())
-    current_idx     = 0
-    if st.session_state['selected_country'] in country_options:
-        current_idx = country_options.index(st.session_state['selected_country'])
-    sidebar_country = st.selectbox(
-        '_country', options=country_options,
-        index=current_idx, label_visibility='collapsed',
-    )
-    st.session_state['selected_country'] = (
-        None if sidebar_country == 'All countries' else sidebar_country
-    )
+with st.expander('Filters: Certificate Price · Sectors · Country',
+                 expanded=st.session_state['filters_open']):
+    _pad_l, fc1, fc2, fc3, fc4, _pad_r = st.columns([0.15, 1.5, 4, 1.5, 0.9, 0.15])
+
+    with fc1:
+        st.markdown('<p class="filter-label">Certificate price (€/tCO₂)</p>',
+                    unsafe_allow_html=True)
+        st.slider(
+            'Certificate price',
+            min_value=25.0, max_value=150.0, step=0.5, format='€%.2f',
+            key='filter_cert_price',
+            label_visibility='collapsed',
+            help=f'Default: €{BASE_PRICE} — first official EC CBAM price, April 2026',
+            on_change=_keep_open,
+        )
+
+    with fc2:
+        st.markdown('<p class="filter-label">Sectors</p>',
+                    unsafe_allow_html=True)
+        st.pills(
+            'Sectors', options=ALL_SECTORS,
+            default=st.session_state['filter_sectors'],
+            selection_mode='multi', label_visibility='collapsed',
+            key='filter_sectors',
+            on_change=_keep_open,
+        )
+
+    with fc3:
+        st.markdown('<p class="filter-label">Country</p>',
+                    unsafe_allow_html=True)
+        country_options = ['All countries'] + sorted(df_countries['country'].tolist())
+        current_idx     = 0
+        if st.session_state['selected_country'] in country_options:
+            current_idx = country_options.index(st.session_state['selected_country'])
+        sidebar_country = st.selectbox(
+            'Country', options=country_options,
+            index=current_idx, label_visibility='collapsed',
+            on_change=_keep_open,
+        )
+        st.session_state['selected_country'] = (
+            None if sidebar_country == 'All countries' else sidebar_country
+        )
+
+    with fc4:
+        st.markdown('<p class="filter-label">&nbsp;</p>', unsafe_allow_html=True)
+        st.button('↺ Reset filters', on_click=_reset_filters,
+                  use_container_width=True)
+
+# Read filter values from their widget keys
+cert_price = st.session_state['filter_cert_price']
+selected_sectors = st.session_state['filter_sectors'] or ALL_SECTORS
 
 st.markdown('</div>', unsafe_allow_html=True)
 
@@ -783,23 +829,26 @@ with col_bar:
         hovertemplate = '<b>%{y}</b><br>' + bar_label + ': %{x:,.2f}<extra></extra>',
     ))
 
+    # top margin matches the nested column header height inside col_map
+    # (section-label + subtitle hint) so both charts start at the same level.
     fig_bar.update_layout(
         yaxis         = dict(autorange='reversed',
                              tickfont=dict(size=10, family='DM Sans', color=TEXT_DARK),
                              gridcolor=BORDER, automargin=True),
-        xaxis         = dict(title=bar_label,
-                             tickfont=dict(size=9, color=TEXT_MID),
-                             gridcolor=BORDER, tickformat='.2s',
-                             title_font=dict(size=10, color=TEXT_MID)),
+        xaxis         = dict(
+            title=None,
+            tickfont=dict(size=9, color=TEXT_MID),
+            gridcolor=BORDER,
+            side='top',
+            tickformat=',.0f',
+        ),
         showlegend    = False,
         paper_bgcolor = BG, plot_bgcolor=BG,
-        margin        = dict(l=10, r=10, t=10, b=50),
+        margin        = dict(l=10, r=10, t=52, b=10),
         height        = 460,
     )
     st.plotly_chart(fig_bar, use_container_width=True, key='bar_chart')
 
-
-st.markdown('<br>', unsafe_allow_html=True)
 
 
 # ── Row 2: Sector donut [1] | EAF chart [2] | Grid chart [2] ─────────────────
