@@ -515,12 +515,11 @@ if 'selected_country' not in st.session_state:
 st.markdown('<div class="filter-bar">', unsafe_allow_html=True)
 
 st.markdown(
-    # Space above, enlarged subtitle, CBAM defaults added, credit line below
     f'<div style="text-align:center; padding:1.4rem 0 1.2rem 0;">'
     f'<div style="font-family:\'DM Serif Display\', serif; '
     f'font-size:2rem; color:{TEXT_DARK}; line-height:1;">'
     f'Who Pays the Carbon Border Bill?</div>'
-    f'<div style="font-size:0.78rem; color:{TEXT_LIGHT}; margin-top:0.35rem;">'
+    f'<div style="font-size:0.88rem; color:{TEXT_MID}; margin-top:0.35rem;">'
     f'A country-level analysis of CBAM costs, export exposure, and savings potentials · 2024 data'
     f'</div>'
     f'<div style="font-size:0.78rem; margin-top:0.3rem;">'
