@@ -19,7 +19,7 @@ from pathlib import Path
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title            = 'CBAM Country Exposure',
+    page_title            = 'Who Pays the Carbon Border Bill?',
     page_icon             = '🌍',
     layout                = 'wide',
     initial_sidebar_state = 'collapsed',
@@ -519,9 +519,9 @@ st.markdown(
     f'<div style="text-align:center; padding:1.4rem 0 1.2rem 0;">'
     f'<div style="font-family:\'DM Serif Display\', serif; '
     f'font-size:2rem; color:{TEXT_DARK}; line-height:1;">'
-    f'CBAM Country Exposure</div>'
+    f'Who Pays the Carbon Border Bill?</div>'
     f'<div style="font-size:0.78rem; color:{TEXT_LIGHT}; margin-top:0.35rem;">'
-    f'EU trade flows · UN Comtrade · EU Commission CBAM Defaults · Ember · 2024'
+    f'A country-level analysis of CBAM costs, export exposure, and savings potentials · 2024 data'
     f'</div>'
     f'<div style="font-size:0.78rem; margin-top:0.3rem;">'
     f'<a href="https://milcahjoseph.com" target="_blank" '
@@ -745,7 +745,7 @@ with k1:
     if selected and sel_cost is not None:
         st.markdown(
             f'<div class="kpi-card-country">'
-            f'<div class="kpi-label">Estimated CBAM Bill<span class="info-wrap" style="margin-left:0.35em; vertical-align:middle;"><span class="info-icon">ⓘ<span class="info-tooltip tip-right" style="width:260px;">Total estimated CBAM certificate cost for this country&#39;s exports of steel, aluminium, cement, fertilizers, and hydrogen to the EU. Represents the country&#39;s aggregate financial exposure under CBAM at the current certificate price. Calc: embedded CO&#8322; in EU-bound exports &times; certificate price, using EU Commission high-route default emission factors.</span></span></span></div>'
+            f'<div class="kpi-label">Estimated CBAM Bill<span class="info-wrap" style="margin-left:0.35em; vertical-align:middle;"><span class="info-icon">ⓘ<span class="info-tooltip tip-right" style="width:260px;">Total estimated CBAM certificate cost for EU-bound exports of steel, aluminium, cement, fertilizers, and hydrogen. <br><br>Calc: embedded CO&#8322; &times; certificate price, using EU Commission high-route default emission factors.</span></span></span></div>'
             f'<div class="kpi-value">€{sel_cost/1e6:.1f}M</div>'
             f'<div class="kpi-sub">{sel_co2/1e6:.2f} MtCO₂ embedded</div>'
             f'</div>', unsafe_allow_html=True)
@@ -753,14 +753,14 @@ with k1:
         # Country selected but no cost data available in the filtered dataset
         st.markdown(
             f'<div class="kpi-card-neutral">'
-            f'<div class="kpi-label">Estimated CBAM Bill<span class="info-wrap" style="margin-left:0.35em; vertical-align:middle;"><span class="info-icon">ⓘ<span class="info-tooltip tip-right" style="width:260px;">Total estimated CBAM certificate cost for this country&#39;s exports of steel, aluminium, cement, fertilizers, and hydrogen to the EU. Represents the country&#39;s aggregate financial exposure under CBAM at the current certificate price. Calc: embedded CO&#8322; in EU-bound exports &times; certificate price, using EU Commission high-route default emission factors.</span></span></span></div>'
+            f'<div class="kpi-label">Estimated CBAM Bill<span class="info-wrap" style="margin-left:0.35em; vertical-align:middle;"><span class="info-icon">ⓘ<span class="info-tooltip tip-right" style="width:260px;">Total estimated CBAM certificate cost for EU-bound exports of steel, aluminium, cement, fertilizers, and hydrogen. <br><br>Calc: embedded CO&#8322; &times; certificate price, using EU Commission high-route default emission factors.</span></span></span></div>'
             f'<div class="kpi-value">N/A</div>'
             f'<div class="kpi-sub">No data for selected sectors</div>'
             f'</div>', unsafe_allow_html=True)
     else:
         st.markdown(
             f'<div class="kpi-card">'
-            f'<div class="kpi-label">Est. CBAM Bill — Global<span class="info-wrap" style="margin-left:0.35em; vertical-align:middle;"><span class="info-icon">ⓘ<span class="info-tooltip tip-right" style="width:260px;">Total estimated CBAM certificate cost for this country&#39;s exports of steel, aluminium, cement, fertilizers, and hydrogen to the EU. Represents the country&#39;s aggregate financial exposure under CBAM at the current certificate price. Calc: embedded CO&#8322; in EU-bound exports &times; certificate price, using EU Commission high-route default emission factors.</span></span></span></div>'
+            f'<div class="kpi-label">Est. CBAM Bill — Global<span class="info-wrap" style="margin-left:0.35em; vertical-align:middle;"><span class="info-icon">ⓘ<span class="info-tooltip tip-right" style="width:260px;">Total estimated CBAM certificate cost for EU-bound exports of steel, aluminium, cement, fertilizers, and hydrogen. <br><br>Calc: embedded CO&#8322; &times; certificate price, using EU Commission high-route default emission factors.</span></span></span></div>'
             f'<div class="kpi-value">€{total_cost_high/1e9:.2f}B</div>'
             f'<div class="kpi-sub">{total_co2/1e6:.1f} MtCO₂ embedded</div>'
             f'</div>', unsafe_allow_html=True)
@@ -781,14 +781,14 @@ with k2:
             # No Comtrade export data for this country
             st.markdown(
                 f'<div class="kpi-card-neutral">'
-                f'<div class="kpi-label">CBAM-Sector Exports to EU<span class="info-wrap" style="margin-left:0.35em; vertical-align:middle;"><span class="info-icon">ⓘ<span class="info-tooltip tip-right" style="width:260px;">Share of this country&#39;s total global CBAM-sector exports (by value) that are destined for the EU, and therefore subject to CBAM fees. A higher percentage indicates greater structural exposure &mdash; a larger portion of the country&#39;s industrial export base faces the carbon border adjustment. Exports to non-EU markets are unaffected. Source: UN Comtrade 2024.</span></span></span></div>'
+                f'<div class="kpi-label">CBAM-Sector Exports to EU<span class="info-wrap" style="margin-left:0.35em; vertical-align:middle;"><span class="info-icon">ⓘ<span class="info-tooltip tip-right" style="width:260px;">Share of total global CBAM-sector exports (by value) destined for the EU, and therefore subject to CBAM fees. A higher percentage indicates greater structural exposure to the carbon border adjustment. Exports to non-EU markets are unaffected. <br><br>Source: UN Comtrade 2024.</span></span></span></div>'
                 f'<div class="kpi-value">N/A</div>'
                 f'<div class="kpi-sub">No 2024 Comtrade export data available</div>'
                 f'</div>', unsafe_allow_html=True)
         else:
             st.markdown(
                 f'<div class="kpi-card-country">'
-                f'<div class="kpi-label">CBAM-Sector Exports to EU<span class="info-wrap" style="margin-left:0.35em; vertical-align:middle;"><span class="info-icon">ⓘ<span class="info-tooltip tip-right" style="width:260px;">Share of this country&#39;s total global CBAM-sector exports (by value) that are destined for the EU, and therefore subject to CBAM fees. A higher percentage indicates greater structural exposure &mdash; a larger portion of the country&#39;s industrial export base faces the carbon border adjustment. Exports to non-EU markets are unaffected. Source: UN Comtrade 2024.</span></span></span></div>'
+                f'<div class="kpi-label">CBAM-Sector Exports to EU<span class="info-wrap" style="margin-left:0.35em; vertical-align:middle;"><span class="info-icon">ⓘ<span class="info-tooltip tip-right" style="width:260px;">Share of total global CBAM-sector exports (by value) destined for the EU, and therefore subject to CBAM fees. A higher percentage indicates greater structural exposure to the carbon border adjustment. Exports to non-EU markets are unaffected. <br><br>Source: UN Comtrade 2024.</span></span></span></div>'
                 f'<div class="kpi-value">{sel_pct:.1f}%</div>'
                 f'<div class="kpi-sub">{sub_str}</div>'
                 f'</div>', unsafe_allow_html=True)
@@ -796,7 +796,7 @@ with k2:
         pct_str = f'{global_pct_exp:.1f}%' if global_pct_exp else 'N/A'
         st.markdown(
             f'<div class="kpi-card">'
-            f'<div class="kpi-label">CBAM-Sector Exports to EU<span class="info-wrap" style="margin-left:0.35em; vertical-align:middle;"><span class="info-icon">ⓘ<span class="info-tooltip tip-right" style="width:260px;">Share of this country&#39;s total global CBAM-sector exports (by value) that are destined for the EU, and therefore subject to CBAM fees. A higher percentage indicates greater structural exposure &mdash; a larger portion of the country&#39;s industrial export base faces the carbon border adjustment. Exports to non-EU markets are unaffected. Source: UN Comtrade 2024.</span></span></span></div>'
+            f'<div class="kpi-label">CBAM-Sector Exports to EU<span class="info-wrap" style="margin-left:0.35em; vertical-align:middle;"><span class="info-icon">ⓘ<span class="info-tooltip tip-right" style="width:260px;">Share of total global CBAM-sector exports (by value) destined for the EU, and therefore subject to CBAM fees. A higher percentage indicates greater structural exposure to the carbon border adjustment. Exports to non-EU markets are unaffected. <br><br>Source: UN Comtrade 2024.</span></span></span></div>'
             f'<div class="kpi-value">{pct_str}</div>'
             f'<div class="kpi-sub">Total Global: €{total_global_exp/1e9:.1f}B; To EU: €{total_eu_imports/1e9:.1f}B</div>'
             f'</div>', unsafe_allow_html=True)
@@ -806,7 +806,7 @@ with k3:
         country_share = sel_cost / total_cost_high * 100
         st.markdown(
             f'<div class="kpi-card-country">'
-            f'<div class="kpi-label">Share of Global CBAM Bill<span class="info-wrap" style="margin-left:0.35em; vertical-align:middle;"><span class="info-icon">ⓘ<span class="info-tooltip tip-right" style="width:260px;">This country&#39;s estimated CBAM bill as a proportion of the total estimated bill across all 119 CBAM-affected countries. Indicates relative significance within the global CBAM landscape. Calc: country bill &divide; global total bill.</span></span></span></div>'
+            f'<div class="kpi-label">Share of Global CBAM Bill<span class="info-wrap" style="margin-left:0.35em; vertical-align:middle;"><span class="info-icon">ⓘ<span class="info-tooltip tip-right" style="width:260px;">Estimated CBAM bill as a proportion of the total bill across all 119 CBAM-affected countries. Indicates relative significance within the global CBAM landscape. <br><br>Calc: selected bill &divide; global total bill.</span></span></span></div>'
             f'<div class="kpi-value">{country_share:.1f}%</div>'
             f'<div class="kpi-sub">Ranked #{sel_rank} globally</div>'
             f'</div>', unsafe_allow_html=True)
@@ -814,14 +814,14 @@ with k3:
         # Country selected but no cost data available in the filtered dataset
         st.markdown(
             f'<div class="kpi-card-neutral">'
-            f'<div class="kpi-label">Share of Global CBAM Bill<span class="info-wrap" style="margin-left:0.35em; vertical-align:middle;"><span class="info-icon">ⓘ<span class="info-tooltip tip-right" style="width:260px;">This country&#39;s estimated CBAM bill as a proportion of the total estimated bill across all 119 CBAM-affected countries. Indicates relative significance within the global CBAM landscape. Calc: country bill &divide; global total bill.</span></span></span></div>'
+            f'<div class="kpi-label">Share of Global CBAM Bill<span class="info-wrap" style="margin-left:0.35em; vertical-align:middle;"><span class="info-icon">ⓘ<span class="info-tooltip tip-right" style="width:260px;">Estimated CBAM bill as a proportion of the total bill across all 119 CBAM-affected countries. Indicates relative significance within the global CBAM landscape. <br><br>Calc: selected bill &divide; global total bill.</span></span></span></div>'
             f'<div class="kpi-value">N/A</div>'
             f'<div class="kpi-sub">No data for selected sectors</div>'
             f'</div>', unsafe_allow_html=True)
     else:
         st.markdown(
             f'<div class="kpi-card">'
-            f'<div class="kpi-label">Top 3 Share of CBAM Bill<span class="info-wrap" style="margin-left:0.35em; vertical-align:middle;"><span class="info-icon">ⓘ<span class="info-tooltip tip-right" style="width:260px;">This country&#39;s estimated CBAM bill as a proportion of the total estimated bill across all 119 CBAM-affected countries. Indicates relative significance within the global CBAM landscape. Calc: country bill &divide; global total bill.</span></span></span></div>'
+            f'<div class="kpi-label">Top 3 Share of CBAM Bill<span class="info-wrap" style="margin-left:0.35em; vertical-align:middle;"><span class="info-icon">ⓘ<span class="info-tooltip tip-right" style="width:260px;">Estimated CBAM bill as a proportion of the total bill across all 119 CBAM-affected countries. Indicates relative significance within the global CBAM landscape. <br><br>Calc: selected bill &divide; global total bill.</span></span></span></div>'
             f'<div class="kpi-value">{top3_share:.0f}%</div>'
             f'<div class="kpi-sub">{top3_names}</div>'
             f'</div>', unsafe_allow_html=True)
@@ -832,7 +832,7 @@ with k4:
         diff_str = f'{"+" if diff > 0 else ""}{diff:.0f} vs global avg ({global_grid_avg:.0f})'
         st.markdown(
             f'<div class="kpi-card-country">'
-            f'<div class="kpi-label">Grid Intensity<span class="info-wrap" style="margin-left:0.35em; vertical-align:middle;"><span class="info-icon">ⓘ<span class="info-tooltip tip-left" style="width:260px;">CO&#8322; intensity of the national electricity grid, measured in grams of CO&#8322; per kilowatt-hour. Grid intensity determines the indirect emissions component of electricity-intensive processes &mdash; most critically EAF steel &mdash; and therefore directly affects the verified CBAM cost for those sectors. Source: Ember 2024.</span></span></span></div>'
+            f'<div class="kpi-label">Grid Intensity<span class="info-wrap" style="margin-left:0.35em; vertical-align:middle;"><span class="info-icon">ⓘ<span class="info-tooltip tip-left" style="width:260px;">CO&#8322; intensity of the electricity grid in gCO&#8322;/kWh. Determines the indirect emissions component of electricity-intensive processes &mdash; most critically EAF steel &mdash; directly affecting the verified CBAM cost. <br><br>Source: Ember 2024.</span></span></span></div>'
             f'<div class="kpi-value">{sel_grid:.0f}<span style="font-size:0.68rem; font-weight:400; color:{TEXT_DARK}; margin-left:0.2em;">gCO₂/kWh</span></div>'
             f'<div class="kpi-sub">{diff_str}</div>'
             f'</div>', unsafe_allow_html=True)
@@ -840,14 +840,14 @@ with k4:
         # Country selected but no 2024 Ember grid data available
         st.markdown(
             f'<div class="kpi-card-neutral">'
-            f'<div class="kpi-label">Grid Intensity<span class="info-wrap" style="margin-left:0.35em; vertical-align:middle;"><span class="info-icon">ⓘ<span class="info-tooltip tip-left" style="width:260px;">CO&#8322; intensity of the national electricity grid, measured in grams of CO&#8322; per kilowatt-hour. Grid intensity determines the indirect emissions component of electricity-intensive processes &mdash; most critically EAF steel &mdash; and therefore directly affects the verified CBAM cost for those sectors. Source: Ember 2024.</span></span></span></div>'
+            f'<div class="kpi-label">Grid Intensity<span class="info-wrap" style="margin-left:0.35em; vertical-align:middle;"><span class="info-icon">ⓘ<span class="info-tooltip tip-left" style="width:260px;">CO&#8322; intensity of the electricity grid in gCO&#8322;/kWh. Determines the indirect emissions component of electricity-intensive processes &mdash; most critically EAF steel &mdash; directly affecting the verified CBAM cost. <br><br>Source: Ember 2024.</span></span></span></div>'
             f'<div class="kpi-value">N/A</div>'
             f'<div class="kpi-sub">No 2024 Ember data available</div>'
             f'</div>', unsafe_allow_html=True)
     else:
         st.markdown(
             f'<div class="kpi-card">'
-            f'<div class="kpi-label">Global Avg Grid Intensity<span class="info-wrap" style="margin-left:0.35em; vertical-align:middle;"><span class="info-icon">ⓘ<span class="info-tooltip tip-left" style="width:260px;">CO&#8322; intensity of the national electricity grid, measured in grams of CO&#8322; per kilowatt-hour. Grid intensity determines the indirect emissions component of electricity-intensive processes &mdash; most critically EAF steel &mdash; and therefore directly affects the verified CBAM cost for those sectors. Source: Ember 2024.</span></span></span></div>'
+            f'<div class="kpi-label">Global Avg Grid Intensity<span class="info-wrap" style="margin-left:0.35em; vertical-align:middle;"><span class="info-icon">ⓘ<span class="info-tooltip tip-left" style="width:260px;">CO&#8322; intensity of the electricity grid in gCO&#8322;/kWh. Determines the indirect emissions component of electricity-intensive processes &mdash; most critically EAF steel &mdash; directly affecting the verified CBAM cost. <br><br>Source: Ember 2024.</span></span></span></div>'
             f'<div class="kpi-value">{global_grid_avg:.0f}<span style="font-size:0.68rem; font-weight:400; color:{TEXT_DARK}; margin-left:0.2em;">gCO₂/kWh</span></div>'
             f'<div class="kpi-sub">Source: Ember 2024</div>'
             f'</div>', unsafe_allow_html=True)
@@ -865,14 +865,14 @@ with k5:
         _card_class = 'kpi-card-country' if selected else 'kpi-card'
         st.markdown(
             f'<div class="{_card_class}">'
-            f'<div class="kpi-label">Steel Bill Savings<span class="info-wrap" style="margin-left:0.35em; vertical-align:middle;"><span class="info-icon">ⓘ<span class="info-tooltip tip-left" style="width:260px;">Estimated reduction in steel CBAM costs if the country&#39;s entire iron and steel export volume switched from blast furnace (BOF) default reporting to verified electric arc furnace (EAF) production on a Norway-level clean grid. This represents the upper-bound savings scenario. Calc: steel export tonnes derived from current BOF default cost; repriced at EAF verified direct emissions (0.69 tCO&#8322;/t) plus indirect emissions at clean grid intensity (29.66 gCO&#8322;/kWh, Norway 2024, Ember).</span></span></span></div>'
+            f'<div class="kpi-label">Steel Bill Savings<span class="info-wrap" style="margin-left:0.35em; vertical-align:middle;"><span class="info-icon">ⓘ<span class="info-tooltip tip-left" style="width:260px;">Estimated reduction in steel CBAM costs if the entire iron and steel export volume switched from BOF default reporting to verified EAF production on a Norway-level clean grid. Upper-bound savings scenario. <br><br>Calc: steel tonnes derived from BOF default cost; repriced at EAF verified emissions (0.69 tCO&#8322;/t direct + 29.66 gCO&#8322;/kWh indirect, Norway 2024, Ember).</span></span></span></div>'
             f'<div class="kpi-value" style="color:{ACCENT}">{_saving_fmt}</div>'
             f'<div class="kpi-sub">−{_kpi5_pct:.0f}% vs BOF default'
             f'</div>', unsafe_allow_html=True)
     else:
         st.markdown(
             f'<div class="kpi-card-neutral">'
-            f'<div class="kpi-label">Steel Bill Savings<span class="info-wrap" style="margin-left:0.35em; vertical-align:middle;"><span class="info-icon">ⓘ<span class="info-tooltip tip-left" style="width:260px;">Estimated reduction in steel CBAM costs if the country&#39;s entire iron and steel export volume switched from blast furnace (BOF) default reporting to verified electric arc furnace (EAF) production on a Norway-level clean grid. This represents the upper-bound savings scenario. Calc: steel export tonnes derived from current BOF default cost; repriced at EAF verified direct emissions (0.69 tCO&#8322;/t) plus indirect emissions at clean grid intensity (29.66 gCO&#8322;/kWh, Norway 2024, Ember).</span></span></span></div>'
+            f'<div class="kpi-label">Steel Bill Savings<span class="info-wrap" style="margin-left:0.35em; vertical-align:middle;"><span class="info-icon">ⓘ<span class="info-tooltip tip-left" style="width:260px;">Estimated reduction in steel CBAM costs if the entire iron and steel export volume switched from BOF default reporting to verified EAF production on a Norway-level clean grid. Upper-bound savings scenario. <br><br>Calc: steel tonnes derived from BOF default cost; repriced at EAF verified emissions (0.69 tCO&#8322;/t direct + 29.66 gCO&#8322;/kWh indirect, Norway 2024, Ember).</span></span></span></div>'
             f'<div class="kpi-value">N/A</div>'
             f'<div class="kpi-sub">Insufficient steel default data</div>'
             f'</div>', unsafe_allow_html=True)
@@ -1048,10 +1048,9 @@ with col_bar:
 
     # Top 10 bar chart info tooltip — placeholder text to be refined later.
     _bar_tooltip = (
-        f'The 10 countries with the highest {bar_label.lower()}. '
-        'Metric matches the active map toggle. '
-        'Highlighted bar (orange) indicates the currently selected country. '
-        'Placeholder: full methodology note to be added.'
+        f'The 10 countries with the highest value for the active metric. Updates with the map toggle.'
+        '<br><br>Highlighted bar indicates the currently selected country.'
+        ' Click any bar to select that country.'
     )
     st.markdown(
         info_label(f'Top 10 — {bar_label.lower()}', _bar_tooltip, tip_side='tip-left'),
@@ -1241,12 +1240,13 @@ with col_eaf:
     context_label = selected if selected else 'global avg'
     # EAF chart info tooltip — uses the existing method-note text as its source.
     _eaf_tooltip = (
-        'Default bars use EU CBAM default values x certificate price. '
-        'Verified EAF bars use Worldsteel Scrap-EAF direct emissions (0.69 tCO\u2082/t) '
-        '+ indirect (450 kWh/t x grid intensity). '
-        'No markup on verified submissions. '
-        'Clean grid benchmark: Norway 29.66 gCO\u2082/kWh (Ember 2024). '
-        'Switch steel grade via the dropdown to compare Carbon vs Low Alloy routes.'
+        'Each bar shows the CBAM cost per tonne of steel under a different reporting'
+        ' or production scenario \u2014 from the most expensive (BOF default) to the'
+        ' cheapest achievable (EAF on clean grid).'
+        '<br><br>Default bars: EU CBAM default emission values \u00d7 certificate price.'
+        '<br>Verified bars: Worldsteel Scrap-EAF direct (0.69 tCO\u2082/t) + indirect'
+        ' (450 kWh/t \u00d7 grid intensity). No markup on verified submissions.'
+        '<br><br>Clean grid benchmark: Norway 29.66 gCO\u2082/kWh (Ember 2024).'
     )
     # Title and dropdown share one row: title left, dropdown right.
     # Using a wide title col and narrow dropdown col keeps the dropdown
@@ -1393,11 +1393,10 @@ with col_grid:
     grid_label = 'Grid generation mix' if selected else 'Global grid generation mix'
     # Grid chart info tooltip — placeholder text to be refined later.
     _grid_tooltip = (
-        'Share of total electricity generation by fuel type, from Ember 2024 data. '
-        'Fossil group: Coal, Gas, Other Fossil. '
-        'Clean group: Hydro, Wind, Solar, Nuclear, Other Renewables. '
-        'Grid intensity (gCO\u2082/kWh) feeds directly into the EAF verified scenario bars. '
-        'Placeholder: full methodology note to be added.'
+        'Electricity generation mix by fuel type. Fossil and clean groups are labelled above.'
+        '<br><br>Grid intensity (gCO\u2082/kWh) feeds directly into the EAF verified'
+        ' scenario \u2014 a cleaner grid means a lower CBAM bill.'
+        '<br><br>Source: Ember 2024.'
     )
     st.markdown(info_label(grid_label, _grid_tooltip, tip_side='tip-left'), unsafe_allow_html=True)
 
