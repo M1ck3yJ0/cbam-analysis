@@ -1369,12 +1369,9 @@ with col_eaf:
 
 
         fig_eaf.update_layout(
-            xaxis         = dict(title='€ / tonne of steel',
-                                 title_font=dict(size=9, color=TEXT_MID),
-                                 tickfont=dict(size=9, color=TEXT_MID),
-                                 gridcolor=BORDER, zeroline=False,
-                                 autorange=False,
-                                 range=[0, eaf_x_max]),
+            xaxis = dict(visible=False,
+                         autorange=False,
+                         range=[0, eaf_x_max]),
             yaxis         = dict(tickfont=dict(size=9, color=TEXT_MID),
                                  gridcolor='rgba(0,0,0,0)',
                                  automargin=True),
