@@ -1380,7 +1380,7 @@ with col_eaf:
                                  automargin=True),
             paper_bgcolor = BG, plot_bgcolor=BG,
             margin        = dict(l=10, r=10, t=20, b=65),
-            height        = 260,
+            height        = 240,
             showlegend    = False,
         )
 
