@@ -34,7 +34,7 @@ TEXT_MID   = '#908e86'
 TEXT_LIGHT = '#b8b6ae'
 ACCENT     = '#3a6b45'
 ACCENT_MID = '#74b583'
-ACCENT_POP = '#c1653a'
+ACCENT_POP = '#e83b2a'
 MAP_MIN    = '#d3d1c9'
 MAP_MAX    = '#3a6b45'
 
@@ -137,7 +137,7 @@ h1, h2, h3 {{
     margin-bottom: 1.25rem;
 }}
 .streamlit-expanderContent {{
-    padding: 0.5rem 2rem 0.7rem 2rem !important;
+    padding: 0.5rem 15rem 0.7rem 15rem !important;
 }}
 .filter-label {{
     font-size: 0.65rem;
@@ -515,13 +515,22 @@ if 'selected_country' not in st.session_state:
 st.markdown('<div class="filter-bar">', unsafe_allow_html=True)
 
 st.markdown(
-    f'<div style="text-align:center; padding:0.2rem 0 0.4rem 0;">'
+    # Space above, enlarged subtitle, CBAM defaults added, credit line below
+    f'<div style="text-align:center; padding:1.4rem 0 1.2rem 0;">'
     f'<div style="font-family:\'DM Serif Display\', serif; '
     f'font-size:2rem; color:{TEXT_DARK}; line-height:1;">'
     f'CBAM Country Exposure</div>'
-    f'<div style="font-size:0.65rem; color:{TEXT_LIGHT}; margin-top:0.2rem;">'
-    f'EU trade flows · UN Comtrade · Ember · 2024'
-    f'</div></div>',
+    f'<div style="font-size:0.78rem; color:{TEXT_LIGHT}; margin-top:0.35rem;">'
+    f'EU trade flows · UN Comtrade · EU Commission CBAM Defaults · Ember · 2024'
+    f'</div>'
+    f'<div style="font-size:0.78rem; margin-top:0.3rem;">'
+    f'<a href="https://milcahjoseph.com" target="_blank" '
+    f'style="color:{TEXT_MID}; text-decoration:none;">Analysis &amp; Design: Milcah M. Joseph</a>'
+    f' &nbsp;·&nbsp; '
+    f'<a href="https://github.com/M1ck3yJ0/cbam-analysis" target="_blank" '
+    f'style="color:{TEXT_MID}; text-decoration:none;">Data Pipeline: GitHub</a>'
+    f'</div>'
+    f'</div>',
     unsafe_allow_html=True)
 
 # ── Filter state initialisation ──────────────────────────────────────────────
@@ -548,7 +557,7 @@ def _reset_filters():
 
 with st.expander('Filters: Certificate Price · Sectors · Country',
                  expanded=st.session_state['filters_open']):
-    _pad_l, fc1, fc2, fc3, fc4, _pad_r = st.columns([0.15, 1.5, 4, 1.5, 0.9, 0.15])
+    _pad_l, fc1, _pad_l, fc2, fc3, _pad_r, fc4, _pad_r = st.columns([0.15, 2, 0.15, 4, 2, 0.10, 1.3, 0.10])
 
     with fc1:
         st.markdown('<p class="filter-label">Certificate price (€/tCO₂)</p>',
@@ -789,7 +798,7 @@ with k2:
             f'<div class="kpi-card">'
             f'<div class="kpi-label">CBAM-Sector Exports to EU</div>'
             f'<div class="kpi-value">{pct_str}</div>'
-            f'<div class="kpi-sub">Total Global: €{total_global_exp/1e9:.1f}B, To EU: €{total_eu_imports/1e9:.1f}B</div>'
+            f'<div class="kpi-sub">Total Global: €{total_global_exp/1e9:.1f}B; To EU: €{total_eu_imports/1e9:.1f}B</div>'
             f'</div>', unsafe_allow_html=True)
 
 with k3:
@@ -856,21 +865,19 @@ with k5:
         _card_class = 'kpi-card-country' if selected else 'kpi-card'
         st.markdown(
             f'<div class="{_card_class}">'
-            f'<div class="kpi-label">Steel Bill Saving · EAF + Clean Grid</div>'
+            f'<div class="kpi-label">Steel Bill Savings</div>'
             f'<div class="kpi-value" style="color:{ACCENT}">{_saving_fmt}</div>'
-            f'<div class="kpi-sub">−{_kpi5_pct:.0f}% vs BOF default · '
-            f'if all steel verified at clean grid</div>'
+            f'<div class="kpi-sub">−{_kpi5_pct:.0f}% vs BOF default'
             f'</div>', unsafe_allow_html=True)
     else:
         st.markdown(
             f'<div class="kpi-card-neutral">'
-            f'<div class="kpi-label">Steel Bill Saving · EAF Verified</div>'
+            f'<div class="kpi-label">Steel Bill Savings</div>'
             f'<div class="kpi-value">N/A</div>'
             f'<div class="kpi-sub">Insufficient steel default data</div>'
             f'</div>', unsafe_allow_html=True)
 
-st.markdown('<br>', unsafe_allow_html=True)
-
+st.markdown('<div style="padding-bottom:1.5rem;"></div>', unsafe_allow_html=True)
 
 # ── Map metric toggle ────────────────────────────────────────────────────
 # map_metric must be defined before METRIC_CONFIG and before col_map opens.
@@ -936,17 +943,19 @@ with col_map:
             unsafe_allow_html=True)
     df_map = df_c[df_c[metric_col].notna() & (df_c[metric_col] > 0)].copy()
 
+    # Pre-format cost_high as a readable string (B or M) for the hover tooltip.
+    df_map = df_map.copy()
+    df_map['cost_high_fmt'] = df_map['cost_high'].apply(
+        lambda v: f'€{v/1e9:.1f}B' if v >= 1e9 else f'€{v/1e6:.1f}M'
+    )
+
     fig_map = px.choropleth(
         df_map,
         locations              = 'iso3',
         color                  = metric_col,
         hover_name             = 'country',
-        hover_data             = {
-            'iso3': False,
-            metric_col: True,
-            'cost_high': ':,.0f',
-            'export_data_year': True,
-        },
+        custom_data            = ['cost_high_fmt', 'cost_pct_export', 'cost_per_tonne'],
+        hover_data             = {'iso3': False, metric_col: False},
         color_continuous_scale = [
             [0.0, MAP_MIN], [0.2, '#bdc4bc'], [0.4, '#a0b6a4'],
             [0.6, '#7a9e86'], [0.8, '#52815d'], [1.0, MAP_MAX],
@@ -955,7 +964,18 @@ with col_map:
             df_map[metric_col].quantile(0.05),
             df_map[metric_col].quantile(0.95),
         ],
-        labels = {metric_col: metric_label, 'cost_high': 'CBAM Cost (€)'},
+        labels        = {metric_col: metric_label, 'cost_high': 'CBAM Cost (€)'},
+    )
+    # hovertemplate must be set post-creation; px.choropleth doesn't accept it directly.
+    fig_map.update_traces(
+        hovertemplate=(
+            '<b>%{hovertext}</b><br>'
+            'CBAM Cost: %{customdata[0]}<br>'
+            'Cost/Tonne: €%{customdata[2]:,.2f}<br>'
+            '% of Exports: %{customdata[1]:.1f}%'
+            '<extra></extra>'
+        ),
+        selector=dict(type='choropleth'),
     )
 
     if selected:
@@ -1088,7 +1108,24 @@ with col_bar:
         margin        = dict(l=10, r=10, t=80, b=40),
         height        = 460,
     )
-    st.plotly_chart(fig_bar, use_container_width=True, key='bar_chart')
+    # on_select='rerun' fires a selection event when a bar is clicked.
+    # The selected country name is read from the y-tick of the clicked bar.
+    bar_event = st.plotly_chart(
+        fig_bar, use_container_width=True, key='bar_chart',
+        on_select='rerun', selection_mode='points',
+    )
+
+    # Handle bar click: select on first click, deselect on second.
+    if (bar_event and bar_event.get('selection')
+            and bar_event['selection'].get('points')):
+        pt = bar_event['selection']['points'][0]
+        clicked_name = pt.get('y') or pt.get('label')
+        if clicked_name:
+            if clicked_name != st.session_state['selected_country']:
+                st.session_state['selected_country'] = clicked_name
+            else:
+                st.session_state['selected_country'] = None
+            st.rerun()
 
 
 
@@ -1109,9 +1146,9 @@ st.markdown(
     # Right label: fills remainder, aligns under grid title (starts at 5/8 = 62.5%).
     # Column ratio [2,3,3] with gap='large'. Gaps eat into the percentage
     # widths so we use calc() to subtract approximate gap space (1rem per gap).
-    f'<span style="width:calc(25% - 1rem); display:inline-flex; align-items:center; gap:0.5em; white-space:nowrap;">'
+    f'<span style="width:calc(28% - 1rem); display:inline-flex; align-items:center; gap:0.5em; white-space:nowrap;">'
     f'{_strip_l} <span style="color:{TEXT_LIGHT};">&#8594;</span></span>'
-    f'<span style="width:calc(37.5% - 1rem); display:inline-flex; align-items:center; gap:0.5em; white-space:nowrap;">'
+    f'<span style="width:calc(41% - 1rem); display:inline-flex; align-items:center; gap:0.5em; white-space:nowrap;">'
     f'{_strip_m} <span style="color:{TEXT_LIGHT};">&#8594;</span></span>'
     f'<span style="flex:1; display:inline-flex; align-items:center; gap:0.5em; white-space:nowrap;">'
     f'{_strip_r} <span style="color:{TEXT_LIGHT};">&#8594;</span></span>'
@@ -1505,25 +1542,24 @@ _ctas = [
      'Default emissions assumptions cost 2-4x more than actual verified figures. '
      'The difference is yours to keep.'),
     ('2', 'Switch to cleaner production routes where possible.',
-     "Scrap-based electric arc furnace cuts steel's CBAM bill by ~50% vs BOF default. "
-     'The gap widens on a cleaner grid.'),
+     "Scrap-based electric arc furnace cuts steel's CBAM bill by ~50% vs BOF default."),
     ('3', 'Push for clean energy.',
      'Grid intensity is the last multiplier. '
      'Norway-level clean power cuts the EAF bill by a further ~20%.'),
 ]
 
 _cta_cols = ''.join(
-    f'<div style="padding:0 1.5rem 0 0;">'
-    f'<div style="font-size:2.2rem; font-weight:700; color:{BORDER}; '
-    f'line-height:1; margin-bottom:0.3rem;">{n}</div>'
-    f'<p style="margin:0; font-size:0.72rem; color:{TEXT_MID}; line-height:1.6;">'
-    f'<strong style="color:{TEXT_DARK};">{lead}</strong> {body}</p>'
+    f'<div style="display:flex; align-items:flex-start; gap:0.8em;">'
+    f'<span style="font-size:2.2rem; font-weight:700; color:{TEXT_MID}; '
+    f'line-height:1; flex-shrink:0;">{n}</span>'
+    f'<p style="margin:0; font-size:1.1rem; color:{TEXT_MID}; line-height:1.6;">'
+    f'<strong style="color:#e83b2a;">{lead}</strong> {body}</p>'
     f'</div>'
     for n, lead, body in _ctas
 )
 
 st.markdown(
-    f'<hr style="border:none; border-top:1px solid {BORDER}; margin:1rem 0 1rem 0;">'
+    f'<hr style="border:none; border-top:1px solid {BORDER}; margin:-1.5rem 0 1rem 0;">'
     f'<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:1rem;">'
     + _cta_cols +
     f'</div>',
@@ -1532,7 +1568,7 @@ st.markdown(
 
 st.markdown(
     f'<div style="display:flex; justify-content:space-between; align-items:baseline; '
-    f'padding:0.4rem 0 0.6rem 0; border-top:1px solid {BORDER}; '
+    f'padding:2rem 0 0.6rem 0; border-top:1px solid {BORDER}; margin-top:0.5rem; '
     f'font-size:0.65rem; color:{TEXT_LIGHT};">'
     # Left: attribution with hyperlinks
     f'<span>'
@@ -1550,3 +1586,5 @@ st.markdown(
     f'</div>',
     unsafe_allow_html=True,
 )
+
+st.markdown('<div style="padding-bottom:1.5rem;"></div>', unsafe_allow_html=True)
