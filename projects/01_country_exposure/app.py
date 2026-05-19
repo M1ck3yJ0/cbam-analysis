@@ -41,7 +41,7 @@ MAP_MAX    = '#3a6b45'
 SECTOR_COLORS = {
     'Iron and Steel' : '#5c6b5e',
     'Aluminium'      : '#74b583',
-    'Cement'         : '#c1653a',
+    'Cement'         : '#8faa92',
     'Fertilizers'    : '#3a6b45',
     'Hydrogen'       : '#a8b5aa',
     'Electricity'    : '#d3d1c9',
@@ -994,8 +994,35 @@ with col_bar:
 
 
 
+# ── Row 2 narrative strip ─────────────────────────────────────────────────────
+# A single left-to-right annotation line that frames the three charts below as
+# a connected argument: bill breakdown -> savings opportunity -> grid lever.
+# Labels switch between country and global context to match the selected state.
+_strip_l = 'Country bill breakdown' if selected else 'Global bill breakdown'
+_strip_r = 'Country grid: the final lever' if selected else 'Global grid: the final lever'
+_strip_m = 'What verified reporting and process change saves (e.g. steel)'
+
+st.markdown(
+    f'<div style="'
+    f'display:flex; align-items:center; gap:0; '
+    f'margin:1.6rem 0 0.5rem 0; '
+    f'font-size:0.72rem; color:{TEXT_MID}; letter-spacing:0.06em; text-transform:uppercase;'
+    f'">'
+    # Three labels each followed by an arrow, evenly spaced across the strip.
+    f'<span style="white-space:nowrap;">{_strip_l}</span>'
+    f'<span style="color:{TEXT_LIGHT}; margin:0 0.6em;">&#8594;</span>'
+    f'<span style="flex:1; text-align:center; white-space:nowrap;">{_strip_m}</span>'
+    f'<span style="color:{TEXT_LIGHT}; margin:0 0.6em;">&#8594;</span>'
+    f'<span style="white-space:nowrap;">{_strip_r}</span>'
+    f'<span style="color:{TEXT_LIGHT}; margin-left:0.6em;">&#8594;</span>'
+    f'</div>'
+    # Thin rule below the strip to separate it from the charts
+    f'<hr style="border:none; border-top:1px solid {BORDER}; margin:0 0 1rem 0;">',
+    unsafe_allow_html=True,
+)
+
 # ── Row 2: Sector donut [1] | EAF chart [2] | Grid chart [2] ─────────────────
-col_donut, col_eaf, col_grid = st.columns([1, 2, 2], gap='large')
+col_donut, col_eaf, col_grid = st.columns([2, 3, 2], gap='large')
 
 
 # ── Sector donut ──────────────────────────────────────────────────────────────
@@ -1039,20 +1066,31 @@ with col_donut:
 
     df_ds = df_ds[df_ds['cost_high'] > 0].sort_values('cost_high', ascending=False)
 
+    # Compute total for threshold check; suppress text on slices under 2%
+    # to avoid callout clipping on tiny segments like Hydrogen.
+    _donut_total = df_ds['cost_high'].sum()
+    _donut_pcts  = (df_ds['cost_high'] / _donut_total * 100).tolist() if _donut_total else []
+    _donut_text  = [f'{p:.1f}%' if p >= 2 else '' for p in _donut_pcts]
+
     fig_donut = go.Figure(go.Pie(
         labels        = df_ds['sector'],
         values        = df_ds['cost_high'],
         hole          = 0.55,
         marker_colors = [SECTOR_COLORS.get(s, '#d3d1c9') for s in df_ds['sector']],
-        textinfo      = 'percent',
+        text          = _donut_text,
+        textinfo      = 'text',
         textfont      = dict(size=10),
-        hovertemplate = '<b>%{label}</b><br>€%{value:,.0f}<br>%{percent}<extra></extra>',
+        hovertemplate = '<b>%{label}</b><br>€%{value:,.0f}<br>%{percent:.1%}<extra></extra>',
     ))
     fig_donut.update_layout(
         showlegend    = True,
-        legend        = dict(font=dict(size=9, color=TEXT_MID),
-                             orientation='v', x=1.0),
-        margin        = dict(l=0, r=90, t=10, b=0),
+        legend        = dict(
+            font=dict(size=9, color=TEXT_MID),
+            orientation='h',
+            x=0.5, xanchor='center',
+            y=-0.12, yanchor='top',
+        ),
+        margin        = dict(l=0, r=0, t=10, b=80),
         paper_bgcolor = BG,
         height        = 320,
     )
@@ -1073,18 +1111,27 @@ with col_eaf:
     )
     st.markdown(
         info_label(
-            f'Steel CBAM cost per tonne — default vs verified · {context_label}',
+            f'Steel CBAM cost per tonne',
             _eaf_tooltip,
             tip_side='tip-right',
         ),
         unsafe_allow_html=True)
 
-    # Route dropdown — above the chart, full width of this column
-    eaf_route_label = st.selectbox(
-        'Steel grade',
-        options = list(ROUTE_OPTIONS.keys()),
-        index   = 0,
-    )
+    # Route dropdown — inline with its label in a compact two-column row.
+    # The label column is narrow so the dropdown hugs it without a header gap.
+    _dd_label_col, _dd_select_col = st.columns([1, 3], gap='small')
+    with _dd_label_col:
+        st.markdown(
+            f'<p style="font-size:0.68rem; color:{TEXT_MID}; margin:0.55rem 0 0 0; '
+            f'letter-spacing:0.03em;">Steel grade</p>',
+            unsafe_allow_html=True)
+    with _dd_select_col:
+        eaf_route_label = st.selectbox(
+            'Steel grade',
+            options = list(ROUTE_OPTIONS.keys()),
+            index   = 0,
+            label_visibility='collapsed',
+        )
     eaf_code, bof_code = ROUTE_OPTIONS[eaf_route_label]
 
     # Helper: get default_2026 for a route, country-specific or global avg.
@@ -1145,11 +1192,18 @@ with col_eaf:
         v_eaf_clean   = EAF_DIRECT_EMISSIONS * cert_price + indirect_eur_per_t(CLEAN_GRID_INTENSITY)
 
         scenario_defs = [
-            ('BOF\nDefault',                        v_bof_default, BORDER),
-            ('EAF\nDefault',                        v_eaf_default, TEXT_MID),
-            (f'EAF Verified\n{current_label} grid', v_eaf_current, ACCENT),
-            (f'EAF Verified\n{CLEAN_GRID_COUNTRY} grid', v_eaf_clean, ACCENT_MID),
+            ('BOF Default',   v_bof_default, BORDER),
+            ('EAF Default',   v_eaf_default, TEXT_MID),
+            ('EAF Verified',  v_eaf_current, ACCENT),
+            ('EAF Verified ', v_eaf_clean,   ACCENT_MID),
         ]
+        # Grid context for the two verified bars: shown as right-side
+        # annotations rather than cramming into the y-axis tick label.
+        # Trailing space on the second 'EAF Verified' keeps y-tick unique.
+        _eaf_grid_notes = {
+            'EAF Verified' : f'{current_label} ({current_grid:.0f} gCO₂/kWh)',
+            'EAF Verified ': f'{CLEAN_GRID_COUNTRY} ({CLEAN_GRID_INTENSITY:.0f} gCO₂/kWh)',
+        }
         scenarios  = [s for s, v, _ in scenario_defs if v is not None]
         values     = [v for _, v, _ in scenario_defs if v is not None]
         bar_colors = [c for _, v, c in scenario_defs if v is not None]
@@ -1187,9 +1241,28 @@ with col_eaf:
                 annotation_font     = dict(size=8, color=TEXT_LIGHT),
             )
 
-        eaf_x_max = max(600, max((v for v in values if v is not None), default=0) * 1.25)
+        # Dynamic axis: ceiling is 25% headroom above the tallest bar so
+        # value labels never clip, with no artificial floor.
+        eaf_x_max = max((v for v in values if v is not None), default=0) * 1.25
+
+        # Right-side grid-context annotations for the two EAF Verified bars.
+        # Positioned just past the x-axis max, vertically at the bar's y-tick.
+        _eaf_annotations = []
+        for label, note in _eaf_grid_notes.items():
+            if label in scenarios:
+                _eaf_annotations.append(dict(
+                    x          = eaf_x_max * 0.98,
+                    y          = label,
+                    xref       = 'x', yref='y',
+                    text       = note,
+                    showarrow  = False,
+                    xanchor    = 'right',
+                    yanchor    = 'middle',
+                    font       = dict(size=8, color=TEXT_LIGHT),
+                ))
 
         fig_eaf.update_layout(
+            annotations   = _eaf_annotations,
             xaxis         = dict(title='€ / tonne of steel',
                                  title_font=dict(size=9, color=TEXT_MID),
                                  tickfont=dict(size=9, color=TEXT_MID),
@@ -1266,28 +1339,29 @@ with col_grid:
     )
     clean_pct = 100 - fossil_pct
 
-    # Shaded background rectangles identifying fossil and clean groups.
-    # Drawn on the plot layer below bars using Plotly shapes.
-    shapes, annotations = [], []
-    # Indices are stable since all fuels are always present in fixed order.
+    # Fossil and clean group shading uses layout shapes anchored to data
+    # coordinates (xref='x', yref='y'). y0=0, y1=100 fills exactly to the
+    # top of the y-axis, not the full paper height — so the shaded bands sit
+    # correctly behind the bars like a grouped nested column chart.
     fossil_idx = list(range(len(FOSSIL_FUELS)))
     clean_idx  = list(range(len(FOSSIL_FUELS), len(FOSSIL_FUELS) + len(CLEAN_FUELS)))
 
-    for indices, bg_color, label, grp_pct in [
+    shapes, annotations = [], []
+    for indices, color, label, grp_pct in [
         (fossil_idx, '#4a4a4a', 'Fossil', fossil_pct),
         (clean_idx,  '#3a6b45', 'Clean',  clean_pct),
     ]:
-        if not indices:
-            continue
-        x0, x1 = indices[0] - 0.45, indices[-1] + 0.45
+        x0 = indices[0] - 0.45
+        x1 = indices[-1] + 0.45
+        # Shape spans full data height (0 to 100%) in data coordinates.
         shapes.append(dict(
             type='rect', layer='below',
-            x0=x0, x1=x1, y0=0, y1=1,
-            xref='x', yref='paper',
-            fillcolor=bg_color, opacity=0.07, line_width=0,
+            x0=x0, x1=x1, y0=0, y1=100,
+            xref='x', yref='y',
+            fillcolor=color, opacity=0.15, line_width=0,
         ))
         annotations.append(dict(
-            x=(x0 + x1) / 2, y=1.05,
+            x=(x0 + x1) / 2, y=1.06,
             xref='x', yref='paper',
             text=f'<b>{label}</b> {grp_pct:.0f}%',
             showarrow=False,
@@ -1296,14 +1370,17 @@ with col_grid:
         ))
 
     fig_grid = go.Figure()
+
+    # Single trace: individual fuel bars rendered over the layout shapes.
     fig_grid.add_trace(go.Bar(
         x                 = x_pos,
         y                 = pct_vals,
         marker_color      = [FUEL_COLORS.get(f, '#999') for f in fuels],
         marker_line_width = 0,
-        text              = [f'{v:.1f}%' if v >= 2 else '' for v in pct_vals],
+        text              = [f'{v:.1f}%' if v > 0 else '' for v in pct_vals],
         textposition      = 'outside',
         textfont          = dict(size=8, color=TEXT_MID),
+        cliponaxis        = False,
         customdata        = fuels,
         hovertemplate     = '<b>%{customdata}</b><br>%{y:.1f}% of generation<extra></extra>',
     ))
@@ -1325,11 +1402,14 @@ with col_grid:
             gridcolor  = BORDER,
             range      = [0, 100],
         ),
-        paper_bgcolor = BG, plot_bgcolor = BG,
-        margin        = dict(l=40, r=10, t=30, b=65),
+        paper_bgcolor = BG,
+        # plot_bgcolor must be transparent so the layout shapes (group shading)
+        # are visible. An opaque bgcolor paints over layer='below' shapes.
+        plot_bgcolor  = 'rgba(0,0,0,0)',
+        margin        = dict(l=40, r=30, t=30, b=65),
         height        = 320,
         showlegend    = False,
-        bargap        = 0.35,
+        bargap        = 0.2,
     )
 
     if grid_gen_available:
