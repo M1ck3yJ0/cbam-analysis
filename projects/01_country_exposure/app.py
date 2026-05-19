@@ -999,6 +999,9 @@ with col_map:
             showland=True, landcolor='#eae8e2',
             showocean=True, oceancolor=BG, bgcolor=BG,
             projection_type='natural earth',
+            # Clip Antarctica (below -58°) and reduce excess polar whitespace
+            lataxis =dict(range=[-58, 85]),
+            lonaxis =dict(range=[-180, 180]),
         ),
         coloraxis_colorbar = dict(
             title=dict(
@@ -1226,9 +1229,9 @@ with col_donut:
             x=0.5, xanchor='center',
             y=-0.12, yanchor='top',
         ),
-        margin        = dict(l=0, r=0, t=10, b=75),
+        margin        = dict(l=0, r=0, t=10, b=65),
         paper_bgcolor = BG,
-        height        = 300,
+        height        = 240,
     )
     st.plotly_chart(fig_donut, use_container_width=True, key='donut_chart')
 
@@ -1376,8 +1379,8 @@ with col_eaf:
                                  gridcolor='rgba(0,0,0,0)',
                                  automargin=True),
             paper_bgcolor = BG, plot_bgcolor=BG,
-            margin        = dict(l=10, r=10, t=20, b=80),
-            height        = 320,
+            margin        = dict(l=10, r=10, t=20, b=65),
+            height        = 260,
             showlegend    = False,
         )
 
@@ -1517,14 +1520,15 @@ with col_grid:
             title_font = dict(size=9, color=TEXT_MID),
             tickfont   = dict(size=8, color=TEXT_MID),
             gridcolor  = 'rgba(0,0,0,0)',
-            range      = [0, 110],
+            # Dynamic range: 15% headroom above tallest bar for value labels.
+            range      = [0, max(pct_vals) * 1.15 if pct_vals else 100],
         ),
         paper_bgcolor = BG,
         # plot_bgcolor must be transparent so the layout shapes (group shading)
         # are visible. An opaque bgcolor paints over layer='below' shapes.
         plot_bgcolor  = 'rgba(0,0,0,0)',
         margin        = dict(l=40, r=30, t=30, b=65),
-        height        = 320,
+        height        = 260,
         showlegend    = False,
         bargap        = 0.2,
     )
