@@ -519,7 +519,7 @@ st.markdown(
     f'<div style="font-family:\'DM Serif Display\', serif; '
     f'font-size:2rem; color:{TEXT_DARK}; line-height:1;">'
     f'Who Pays the Carbon Border Bill?</div>'
-    f'<div style="font-size:0.88rem; color:{TEXT_MID}; margin-top:0.35rem;">'
+    f'<div style="font-size:0.98rem; color:{TEXT_MID}; margin-top:0.35rem;">'
     f'A country-level analysis of CBAM costs, export exposure, and savings potentials · 2024 data'
     f'</div>'
     f'<div style="font-size:0.78rem; margin-top:0.3rem;">'
