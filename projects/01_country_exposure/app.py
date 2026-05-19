@@ -77,6 +77,26 @@ ROUTE_OPTIONS = {
     'Low Alloy Steel': ('H', 'F'),
 }
 
+# ── Steel default lookup ─────────────────────────────────────────────────────
+# Hoisted to module level so it can be called both from the KPI cards
+# and from the EAF scenario chart without duplication.
+# Returns avg_default_2026 tCO2/t for a given route code, optionally
+# country-specific; falls back to global average if no country row exists.
+def get_default(route_code, country=None):
+    """Look up the CBAM default emission factor (tCO2/t) for a steel route."""
+    # df_defaults_steel is loaded below; forward reference is fine at call time.
+    df = df_defaults_steel[df_defaults_steel['route_code'] == route_code]
+    if df.empty:
+        return None
+    if country:
+        row = df[df['country'] == country]
+        if not row.empty:
+            val = float(row.iloc[0]['avg_default_2026'])
+            return val if pd.notna(val) else None
+    global_avg = float(df['avg_default_2026'].mean())
+    return global_avg if pd.notna(global_avg) else None
+
+
 # BASE_PRICE_EUR matches the notebook constant. Used only to rescale the
 # per-sector convenience cost columns stored in cbam_cost_by_country.
 BASE_PRICE = 75.36
@@ -670,6 +690,45 @@ if selected:
         sel_fallback   = bool(s.get('is_fallback_year', 0))
 
 
+# ── KPI 5: Steel CO2 saving calculation ──────────────────────────────────────
+# Estimates CO2 saved if the country's (or global) iron & steel CBAM-sector
+# exports all switched from BOF default to EAF Verified at current grid.
+# Route: Carbon Steel BOF ('C') vs EAF ('E') — the dominant global route.
+_bof_code_kpi = 'C'
+_eaf_code_kpi = 'E'
+_bof_def_kpi  = get_default(_bof_code_kpi, selected if selected else None)
+_eaf_def_kpi  = get_default(_eaf_code_kpi, selected if selected else None)
+
+# Dream scenario: EAF Verified at clean grid (Norway), not current grid.
+# This is the full theoretical ceiling — switch to EAF + clean energy.
+_kpi5_grid = CLEAN_GRID_INTENSITY
+_eaf_verified_tco2_per_t = (
+    EAF_DIRECT_EMISSIONS + EAF_ELECTRICITY_KWH_PER_T * CLEAN_GRID_INTENSITY * 1e-6
+)
+
+# Steel cost for the selected country or global total
+_price_ratio_kpi5 = cert_price / BASE_PRICE
+if selected:
+    _pivot = df_sector_pivots[df_sector_pivots['country'] == selected]
+    _steel_cost_kpi5 = (
+        float(_pivot.iloc[0]['cost_iron_and_steel_high_route_eur']) * _price_ratio_kpi5
+        if not _pivot.empty else None
+    )
+else:
+    _steel_cost_kpi5 = (
+        df_sector_pivots['cost_iron_and_steel_high_route_eur'].sum() * _price_ratio_kpi5
+    )
+
+# Derive euro bill saving if all steel tonnes switched BOF -> EAF Verified
+_kpi5_saving_eur = None
+_kpi5_pct        = None
+if _bof_def_kpi and _steel_cost_kpi5 and _steel_cost_kpi5 > 0:
+    _steel_tonnes_kpi5  = _steel_cost_kpi5 / (_bof_def_kpi * cert_price)
+    _cost_eaf_verified  = _steel_tonnes_kpi5 * _eaf_verified_tco2_per_t * cert_price
+    _eur_saving         = _steel_cost_kpi5 - _cost_eaf_verified
+    _kpi5_saving_eur    = _eur_saving
+    _kpi5_pct           = (_eur_saving / _steel_cost_kpi5 * 100) if _steel_cost_kpi5 else None
+
 # ── KPI cards (5) ─────────────────────────────────────────────────────────────
 k1, k2, k3, k4, k5 = st.columns(5)
 
@@ -785,14 +844,30 @@ with k4:
             f'</div>', unsafe_allow_html=True)
 
 with k5:
-    # Placeholder: estimated CO2 reduction if iron & steel switched to
-    # Scrap-EAF on a Norway-equivalent clean grid. Full calculation pending.
-    st.markdown(
-        f'<div class="kpi-card-neutral">'
-        f'<div class="kpi-label">EAF + Clean Grid CO₂ Saving</div>'
-        f'<div class="kpi-value">~34%</div>'
-        f'<div class="kpi-sub">Coming soon</div>'
-        f'</div>', unsafe_allow_html=True)
+    # Euro bill saving if all steel switched from BOF default to EAF Verified
+    # at current grid intensity. Value formatted as M or B depending on scale.
+    _grid_ctx = f'{_kpi5_grid:.0f} gCO₂/kWh'
+    if _kpi5_saving_eur is not None and _kpi5_pct is not None:
+        _saving_fmt = (
+            f'€{_kpi5_saving_eur/1e9:.2f}B'
+            if _kpi5_saving_eur >= 1e9
+            else f'€{_kpi5_saving_eur/1e6:.1f}M'
+        )
+        _card_class = 'kpi-card-country' if selected else 'kpi-card'
+        st.markdown(
+            f'<div class="{_card_class}">'
+            f'<div class="kpi-label">Steel Bill Saving · EAF + Clean Grid</div>'
+            f'<div class="kpi-value" style="color:{ACCENT}">{_saving_fmt}</div>'
+            f'<div class="kpi-sub">−{_kpi5_pct:.0f}% vs BOF default · '
+            f'if all steel verified at clean grid</div>'
+            f'</div>', unsafe_allow_html=True)
+    else:
+        st.markdown(
+            f'<div class="kpi-card-neutral">'
+            f'<div class="kpi-label">Steel Bill Saving · EAF Verified</div>'
+            f'<div class="kpi-value">N/A</div>'
+            f'<div class="kpi-sub">Insufficient steel default data</div>'
+            f'</div>', unsafe_allow_html=True)
 
 st.markdown('<br>', unsafe_allow_html=True)
 
@@ -999,23 +1074,51 @@ with col_bar:
     fig_bar.update_layout(
         yaxis         = dict(autorange='reversed',
                              tickfont=dict(size=10, family='DM Sans', color=TEXT_DARK),
-                             gridcolor=BORDER, automargin=True),
+                             gridcolor='rgba(0,0,0,0)', automargin=True),
         xaxis         = dict(
             title=None,
             tickfont=dict(size=9, color=TEXT_MID),
-            gridcolor=BORDER,
+            gridcolor='rgba(0,0,0,0)',
             side='top',
             tickformat=bar_tickfmt,
             ticksuffix=bar_ticksuffix,
         ),
         showlegend    = False,
         paper_bgcolor = BG, plot_bgcolor=BG,
-        margin        = dict(l=10, r=10, t=52, b=10),
+        margin        = dict(l=10, r=10, t=80, b=40),
         height        = 460,
     )
     st.plotly_chart(fig_bar, use_container_width=True, key='bar_chart')
 
 
+
+# ── Row 2 narrative strip ─────────────────────────────────────────────────────
+# Frames the three charts as a connected argument before the reader sees them.
+_strip_l = 'Country bill breakdown' if selected else 'Global bill breakdown'
+_strip_r = 'Country grid: the final lever' if selected else 'Global grid: the final lever'
+_strip_m = 'What verified reporting and process change saves (e.g. steel)'
+
+st.markdown(
+    f'<div style="'
+    f'display:flex; align-items:center; gap:0; '
+    f'margin:1.6rem 0 0.5rem 0; '
+    f'font-size:0.72rem; color:{TEXT_MID}; letter-spacing:0.06em; text-transform:uppercase;'
+    f'">'
+    # Left label: fixed width = donut column (2/8 = 25%).
+    # Middle label: fixed width = EAF column (3/8 = 37.5%), aligns under EAF title.
+    # Right label: fills remainder, aligns under grid title (starts at 5/8 = 62.5%).
+    # Column ratio [2,3,3] with gap='large'. Gaps eat into the percentage
+    # widths so we use calc() to subtract approximate gap space (1rem per gap).
+    f'<span style="width:calc(25% - 1rem); display:inline-flex; align-items:center; gap:0.5em; white-space:nowrap;">'
+    f'{_strip_l} <span style="color:{TEXT_LIGHT};">&#8594;</span></span>'
+    f'<span style="width:calc(37.5% - 1rem); display:inline-flex; align-items:center; gap:0.5em; white-space:nowrap;">'
+    f'{_strip_m} <span style="color:{TEXT_LIGHT};">&#8594;</span></span>'
+    f'<span style="flex:1; display:inline-flex; align-items:center; gap:0.5em; white-space:nowrap;">'
+    f'{_strip_r} <span style="color:{TEXT_LIGHT};">&#8594;</span></span>'
+    f'</div>'
+    f'<hr style="border:none; border-top:1px solid {BORDER}; margin:0 0 1rem 0;">',
+    unsafe_allow_html=True,
+)
 
 # ── Row 2: Sector donut [1] | EAF chart [2] | Grid chart [2] ─────────────────
 col_donut, col_eaf, col_grid = st.columns([2, 3, 3], gap='large')
@@ -1086,9 +1189,9 @@ with col_donut:
             x=0.5, xanchor='center',
             y=-0.12, yanchor='top',
         ),
-        margin        = dict(l=0, r=0, t=10, b=55),
+        margin        = dict(l=0, r=0, t=10, b=75),
         paper_bgcolor = BG,
-        height        = 260,
+        height        = 300,
     )
     st.plotly_chart(fig_donut, use_container_width=True, key='donut_chart')
 
@@ -1126,20 +1229,7 @@ with col_eaf:
         )
     eaf_code, bof_code = ROUTE_OPTIONS[eaf_route_label]
 
-    # Helper: get default_2026 for a route, country-specific or global avg.
-    # Matches on the cleaned 'route_code' column (parentheses stripped in SQL).
-    # Returns None if no matching rows exist so the caller can handle gracefully.
-    def get_default(route_code, country=None):
-        df = df_defaults_steel[df_defaults_steel['route_code'] == route_code]
-        if df.empty:
-            return None
-        if country:
-            row = df[df['country'] == country]
-            if not row.empty:
-                val = float(row.iloc[0]['avg_default_2026'])
-                return val if pd.notna(val) else None
-        global_avg = float(df['avg_default_2026'].mean())
-        return global_avg if pd.notna(global_avg) else None
+    # get_default() is defined at module level above.
 
     bof_default = get_default(bof_code, selected)
     eaf_default = get_default(eaf_code, selected)
@@ -1187,14 +1277,13 @@ with col_eaf:
             ('BOF Default',   v_bof_default, BORDER),
             ('EAF Default',   v_eaf_default, TEXT_MID),
             ('EAF Verified',  v_eaf_current, ACCENT),
-            ('EAF Verified ', v_eaf_clean,   ACCENT_MID),
+            ('EAF Cleanest',  v_eaf_clean,   ACCENT_MID),
         ]
         # Grid context for the two verified bars: shown as right-side
-        # annotations rather than cramming into the y-axis tick label.
-        # Trailing space on the second 'EAF Verified' keeps y-tick unique.
+        # annotations. Labels are distinct so y-string matching is reliable.
         _eaf_grid_notes = {
             'EAF Verified' : f'{current_label} ({current_grid:.0f} gCO₂/kWh)',
-            'EAF Verified ': f'{CLEAN_GRID_COUNTRY} ({CLEAN_GRID_INTENSITY:.0f} gCO₂/kWh)',
+            'EAF Cleanest' : f'{CLEAN_GRID_COUNTRY} ({CLEAN_GRID_INTENSITY:.0f} gCO₂/kWh)',
         }
         scenarios  = [s for s, v, _ in scenario_defs if v is not None]
         values     = [v for _, v, _ in scenario_defs if v is not None]
@@ -1209,6 +1298,16 @@ with col_eaf:
                 f'Default bars omitted.'
             )
 
+        # Build bar text: value for all bars, grid context appended for verified bars.
+        _bar_labels = []
+        for s, v in zip(scenarios[::-1], values[::-1]):
+            label = f'€{v:.1f}'
+            if s == 'EAF Verified':
+                label += f'  {_eaf_grid_notes["EAF Verified"]}'
+            elif s == 'EAF Cleanest':
+                label += f'  {_eaf_grid_notes["EAF Cleanest"]}'
+            _bar_labels.append(label)
+
         fig_eaf = go.Figure()
         fig_eaf.add_trace(go.Bar(
             y                 = scenarios[::-1],
@@ -1216,61 +1315,31 @@ with col_eaf:
             orientation       = 'h',
             marker_color      = bar_colors[::-1],
             marker_line_width = 0,
-            text              = [f'€{v:.1f}' for v in values[::-1]],
+            text              = _bar_labels,
             textposition      = 'outside',
-            textfont          = dict(size=9, color=TEXT_MID),
+            cliponaxis        = False,
+            textfont          = dict(size=8, color=TEXT_MID),
             hovertemplate     = '<b>%{y}</b><br>€%{x:.2f} per tonne of steel<extra></extra>',
         ))
 
-        if v_eaf_default is not None:
-            fig_eaf.add_vline(
-                x                   = v_eaf_default,
-                line_dash           = 'dash',
-                line_color          = TEXT_LIGHT,
-                line_width          = 1,
-                annotation_text     = 'EAF default',
-                annotation_position = 'top right',
-                annotation_font     = dict(size=8, color=TEXT_LIGHT),
-            )
+        # Ceiling rounds to nearest 25, plus one extra step for outside label room.
+        import math
+        _raw_max  = max((v for v in values if v is not None), default=0)
+        eaf_x_max = math.ceil(_raw_max / 25) * 25 + 25
 
-        # Dynamic axis: ceiling is 25% headroom above the tallest bar so
-        # value labels never clip, with no artificial floor.
-        eaf_x_max = max((v for v in values if v is not None), default=0) * 1.25
-
-        # Grid-context annotations: iterate the reversed list (as drawn)
-        # so y matches the exact tick string Plotly rendered on the axis.
-        # Place each note just right of its own bar value.
-        _scenarios_rev = scenarios[::-1]
-        _values_rev    = values[::-1]
-        _eaf_annotations = []
-        for label, note in _eaf_grid_notes.items():
-            if label in _scenarios_rev:
-                idx     = _scenarios_rev.index(label)
-                bar_val = _values_rev[idx]
-                _eaf_annotations.append(dict(
-                    x          = bar_val,
-                    y          = label,
-                    xref       = 'x', yref='y',
-                    text       = note,
-                    showarrow  = False,
-                    xanchor    = 'left',
-                    xshift     = 6,
-                    yanchor    = 'middle',
-                    font       = dict(size=8, color=TEXT_LIGHT),
-                ))
 
         fig_eaf.update_layout(
-            annotations   = _eaf_annotations,
             xaxis         = dict(title='€ / tonne of steel',
                                  title_font=dict(size=9, color=TEXT_MID),
                                  tickfont=dict(size=9, color=TEXT_MID),
                                  gridcolor=BORDER, zeroline=False,
+                                 autorange=False,
                                  range=[0, eaf_x_max]),
             yaxis         = dict(tickfont=dict(size=9, color=TEXT_MID),
                                  gridcolor='rgba(0,0,0,0)',
                                  automargin=True),
             paper_bgcolor = BG, plot_bgcolor=BG,
-            margin        = dict(l=10, r=70, t=20, b=80),
+            margin        = dict(l=10, r=10, t=20, b=80),
             height        = 320,
             showlegend    = False,
         )
@@ -1410,7 +1479,7 @@ with col_grid:
             title      = '% of total generation',
             title_font = dict(size=9, color=TEXT_MID),
             tickfont   = dict(size=8, color=TEXT_MID),
-            gridcolor  = BORDER,
+            gridcolor  = 'rgba(0,0,0,0)',
             range      = [0, 110],
         ),
         paper_bgcolor = BG,
@@ -1428,31 +1497,56 @@ with col_grid:
 
 
 
-# ── Row 2 narrative strip ─────────────────────────────────────────────────────
-# Sits below the three charts as a reading-direction summary.
-_strip_l = 'Country bill breakdown' if selected else 'Global bill breakdown'
-_strip_r = 'Country grid: the final lever' if selected else 'Global grid: the final lever'
-_strip_m = 'What verified reporting and process change saves (e.g. steel)'
+# ── Calls to action ─────────────────────────────────────────────────────────
+# Three numbered insights that turn the dashboard data into actionable steps.
+# Watermark-style numbers sit to the left of each item as visual anchors.
+_ctas = [
+    ('1', 'Get verified.',
+     'Default emissions assumptions cost 2-4x more than actual verified figures. '
+     'The difference is yours to keep.'),
+    ('2', 'Switch to cleaner production routes where possible.',
+     "Scrap-based electric arc furnace cuts steel's CBAM bill by ~50% vs BOF default. "
+     'The gap widens on a cleaner grid.'),
+    ('3', 'Push for clean energy.',
+     'Grid intensity is the last multiplier. '
+     'Norway-level clean power cuts the EAF bill by a further ~20%.'),
+]
+
+_cta_cols = ''.join(
+    f'<div style="padding:0 1.5rem 0 0;">'
+    f'<div style="font-size:2.2rem; font-weight:700; color:{BORDER}; '
+    f'line-height:1; margin-bottom:0.3rem;">{n}</div>'
+    f'<p style="margin:0; font-size:0.72rem; color:{TEXT_MID}; line-height:1.6;">'
+    f'<strong style="color:{TEXT_DARK};">{lead}</strong> {body}</p>'
+    f'</div>'
+    for n, lead, body in _ctas
+)
 
 st.markdown(
-    f'<hr style="border:none; border-top:1px solid {BORDER}; margin:0.5rem 0 0.6rem 0;">'
-    f'<div style="'
-    f'display:flex; align-items:center; gap:0; '
-    f'margin:0 0 0.8rem 0; '
-    f'font-size:0.72rem; color:{TEXT_MID}; letter-spacing:0.06em; text-transform:uppercase;'
-    f'">'
-    f'<span style="display:inline-flex; align-items:center; gap:0.5em; white-space:nowrap;">'
-    f'{_strip_l} <span style="color:{TEXT_LIGHT};">&#8594;</span></span>'
-    f'<span style="flex:1; display:inline-flex; align-items:center; justify-content:center; gap:0.5em; white-space:nowrap;">'
-    f'{_strip_m} <span style="color:{TEXT_LIGHT};">&#8594;</span></span>'
-    f'<span style="display:inline-flex; align-items:center; gap:0.5em; white-space:nowrap;">'
-    f'{_strip_r} <span style="color:{TEXT_LIGHT};">&#8594;</span></span>'
+    f'<hr style="border:none; border-top:1px solid {BORDER}; margin:1rem 0 1rem 0;">'
+    f'<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:1rem;">'
+    + _cta_cols +
     f'</div>',
     unsafe_allow_html=True,
 )
 
-st.markdown('<br>', unsafe_allow_html=True)
-st.caption(
-    'Sources: EU Commission · Eurostat COMEXT · Worldsteel · UN Comtrade · Ember · '
+st.markdown(
+    f'<div style="display:flex; justify-content:space-between; align-items:baseline; '
+    f'padding:0.4rem 0 0.6rem 0; border-top:1px solid {BORDER}; '
+    f'font-size:0.65rem; color:{TEXT_LIGHT};">'
+    # Left: attribution with hyperlinks
+    f'<span>'
+    f'<a href="https://milcahjoseph.com" target="_blank" '
+    f'style="color:{TEXT_MID}; text-decoration:none;">Analysis &amp; Design: Milcah M. Joseph</a>'
+    f' &nbsp;·&nbsp; '
+    f'<a href="https://github.com/M1ck3yJ0/cbam-analysis" target="_blank" '
+    f'style="color:{TEXT_MID}; text-decoration:none;">Data Pipeline: GitHub</a>'
+    f'</span>'
+    # Right: sources
+    f'<span style="text-align:right;">'
+    f'Sources: EU Commission · Eurostat COMEXT · Worldsteel · UN Comtrade · Ember · '
     f'Certificate price: €{cert_price}/tCO₂'
+    f'</span>'
+    f'</div>',
+    unsafe_allow_html=True,
 )
