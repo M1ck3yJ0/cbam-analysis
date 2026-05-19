@@ -50,14 +50,18 @@ SECTOR_COLORS = {
 FOSSIL_FUELS = ['Coal', 'Gas', 'Other Fossil']
 CLEAN_FUELS  = ['Hydro', 'Wind', 'Solar', 'Nuclear', 'Other Renewables']
 FUEL_COLORS  = {
+    # Fossil fuels: neutral gray scale, dark to light
     'Coal'            : '#4a4a4a',
     'Gas'             : '#9e9e9e',
     'Other Fossil'    : '#bdbdbd',
-    'Hydro'           : '#457b9d',
-    'Wind'            : '#74b583',
-    'Solar'           : '#e9c46a',
-    'Nuclear'         : '#a8b5aa',
-    'Other Renewables': '#2a9d8f',
+    # Clean fuels: teal-green ramp, lightest to deepest.
+    # Teal leans cooler than the brand greens so clean fuels read
+    # as their own category without blending into the donut or EAF bars.
+    'Other Renewables': '#b2dfcc',
+    'Solar'           : '#6dbf9e',
+    'Wind'            : '#2e9e7a',
+    'Nuclear'         : '#1a7a5e',
+    'Hydro'           : '#0d5c45',
 }
 
 # EAF scenario constants
@@ -69,8 +73,8 @@ BOF_DIRECT_EMISSIONS       = 2.34   # tCO2/t, Worldsteel BF-BOF 2024
 
 # Route dropdown options: label -> (eaf_code, bof_code)
 ROUTE_OPTIONS = {
-    'Carbon Steel (Scrap-EAF vs BF-BOF)'   : ('E', 'C'),
-    'Low Alloy Steel (Scrap-EAF vs BF-BOF)': ('H', 'F'),
+    'Carbon Steel'   : ('E', 'C'),
+    'Low Alloy Steel': ('H', 'F'),
 }
 
 # BASE_PRICE_EUR matches the notebook constant. Used only to rescale the
@@ -215,6 +219,25 @@ h1, h2, h3 {{
 }}
 [data-testid="stSlider"] {{ padding-top: 0.1rem; padding-bottom: 0; }}
 [data-testid="stDataFrame"] {{ border-radius: 6px; overflow: hidden; }}
+
+/* ── Steel grade selectbox — compact sizing to match inline label ────────────
+   Targets the select control input and its inner text span. The min-height
+   override shrinks the overall widget height; font-size matches the 0.68rem
+   "Steel grade" label rendered beside it.                                   */
+[data-testid="stSelectbox"] div[data-baseweb="select"] {{
+    min-height: 1.4rem !important;
+    font-size: 0.62rem !important;
+}}
+[data-testid="stSelectbox"] div[data-baseweb="select"] > div {{
+    min-height: 1.4rem !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    font-size: 0.62rem !important;
+}}
+[data-testid="stSelectbox"] span {{
+    font-size: 0.62rem !important;
+    color: {TEXT_DARK} !important;
+}}
 
 /* ── Info icon tooltip ──────────────────────────────────────────────────────
    .info-icon   : the ⓘ glyph, inline with the section label text.
@@ -994,40 +1017,13 @@ with col_bar:
 
 
 
-# ── Row 2 narrative strip ─────────────────────────────────────────────────────
-# A single left-to-right annotation line that frames the three charts below as
-# a connected argument: bill breakdown -> savings opportunity -> grid lever.
-# Labels switch between country and global context to match the selected state.
-_strip_l = 'Country bill breakdown' if selected else 'Global bill breakdown'
-_strip_r = 'Country grid: the final lever' if selected else 'Global grid: the final lever'
-_strip_m = 'What verified reporting and process change saves (e.g. steel)'
-
-st.markdown(
-    f'<div style="'
-    f'display:flex; align-items:center; gap:0; '
-    f'margin:1.6rem 0 0.5rem 0; '
-    f'font-size:0.72rem; color:{TEXT_MID}; letter-spacing:0.06em; text-transform:uppercase;'
-    f'">'
-    # Three labels each followed by an arrow, evenly spaced across the strip.
-    f'<span style="white-space:nowrap;">{_strip_l}</span>'
-    f'<span style="color:{TEXT_LIGHT}; margin:0 0.6em;">&#8594;</span>'
-    f'<span style="flex:1; text-align:center; white-space:nowrap;">{_strip_m}</span>'
-    f'<span style="color:{TEXT_LIGHT}; margin:0 0.6em;">&#8594;</span>'
-    f'<span style="white-space:nowrap;">{_strip_r}</span>'
-    f'<span style="color:{TEXT_LIGHT}; margin-left:0.6em;">&#8594;</span>'
-    f'</div>'
-    # Thin rule below the strip to separate it from the charts
-    f'<hr style="border:none; border-top:1px solid {BORDER}; margin:0 0 1rem 0;">',
-    unsafe_allow_html=True,
-)
-
 # ── Row 2: Sector donut [1] | EAF chart [2] | Grid chart [2] ─────────────────
-col_donut, col_eaf, col_grid = st.columns([2, 3, 2], gap='large')
+col_donut, col_eaf, col_grid = st.columns([2, 3, 3], gap='large')
 
 
 # ── Sector donut ──────────────────────────────────────────────────────────────
 with col_donut:
-    donut_label = f'Cost by sector — {selected}' if selected else 'Global cost by sector'
+    donut_label = 'Cost by sector' if selected else 'Global cost by sector'
     # Sector donut info tooltip — placeholder text to be refined later.
     _donut_tooltip = (
         'Estimated CBAM cost broken down by sector, at the selected certificate price. '
@@ -1090,9 +1086,9 @@ with col_donut:
             x=0.5, xanchor='center',
             y=-0.12, yanchor='top',
         ),
-        margin        = dict(l=0, r=0, t=10, b=80),
+        margin        = dict(l=0, r=0, t=10, b=55),
         paper_bgcolor = BG,
-        height        = 320,
+        height        = 260,
     )
     st.plotly_chart(fig_donut, use_container_width=True, key='donut_chart')
 
@@ -1109,23 +1105,19 @@ with col_eaf:
         'Clean grid benchmark: Norway 29.66 gCO\u2082/kWh (Ember 2024). '
         'Switch steel grade via the dropdown to compare Carbon vs Low Alloy routes.'
     )
-    st.markdown(
-        info_label(
-            f'Steel CBAM cost per tonne',
-            _eaf_tooltip,
-            tip_side='tip-right',
-        ),
-        unsafe_allow_html=True)
-
-    # Route dropdown — inline with its label in a compact two-column row.
-    # The label column is narrow so the dropdown hugs it without a header gap.
-    _dd_label_col, _dd_select_col = st.columns([1, 3], gap='small')
-    with _dd_label_col:
+    # Title and dropdown share one row: title left, dropdown right.
+    # Using a wide title col and narrow dropdown col keeps the dropdown
+    # compact and flush with the chart title on the same baseline.
+    _eaf_title_col, _eaf_dd_col = st.columns([5, 2], gap='small')
+    with _eaf_title_col:
         st.markdown(
-            f'<p style="font-size:0.68rem; color:{TEXT_MID}; margin:0.55rem 0 0 0; '
-            f'letter-spacing:0.03em;">Steel grade</p>',
+            info_label(
+                'Steel CBAM cost per tonne',
+                _eaf_tooltip,
+                tip_side='tip-right',
+            ),
             unsafe_allow_html=True)
-    with _dd_select_col:
+    with _eaf_dd_col:
         eaf_route_label = st.selectbox(
             'Steel grade',
             options = list(ROUTE_OPTIONS.keys()),
@@ -1245,18 +1237,24 @@ with col_eaf:
         # value labels never clip, with no artificial floor.
         eaf_x_max = max((v for v in values if v is not None), default=0) * 1.25
 
-        # Right-side grid-context annotations for the two EAF Verified bars.
-        # Positioned just past the x-axis max, vertically at the bar's y-tick.
+        # Grid-context annotations: iterate the reversed list (as drawn)
+        # so y matches the exact tick string Plotly rendered on the axis.
+        # Place each note just right of its own bar value.
+        _scenarios_rev = scenarios[::-1]
+        _values_rev    = values[::-1]
         _eaf_annotations = []
         for label, note in _eaf_grid_notes.items():
-            if label in scenarios:
+            if label in _scenarios_rev:
+                idx     = _scenarios_rev.index(label)
+                bar_val = _values_rev[idx]
                 _eaf_annotations.append(dict(
-                    x          = eaf_x_max * 0.98,
+                    x          = bar_val,
                     y          = label,
                     xref       = 'x', yref='y',
                     text       = note,
                     showarrow  = False,
-                    xanchor    = 'right',
+                    xanchor    = 'left',
+                    xshift     = 6,
                     yanchor    = 'middle',
                     font       = dict(size=8, color=TEXT_LIGHT),
                 ))
@@ -1272,8 +1270,8 @@ with col_eaf:
                                  gridcolor='rgba(0,0,0,0)',
                                  automargin=True),
             paper_bgcolor = BG, plot_bgcolor=BG,
-            margin        = dict(l=10, r=70, t=20, b=40),
-            height        = 220,
+            margin        = dict(l=10, r=70, t=20, b=80),
+            height        = 320,
             showlegend    = False,
         )
 
@@ -1286,8 +1284,7 @@ with col_eaf:
 # fossil vs clean balance reads immediately without needing a separate legend.
 # Group total percentages are annotated above each shaded region.
 with col_grid:
-    grid_label = (f'Grid generation mix — {selected}'
-                  if selected else 'Global grid generation mix')
+    grid_label = 'Grid generation mix' if selected else 'Global grid generation mix'
     # Grid chart info tooltip — placeholder text to be refined later.
     _grid_tooltip = (
         'Share of total electricity generation by fuel type, from Ember 2024 data. '
@@ -1339,39 +1336,52 @@ with col_grid:
     )
     clean_pct = 100 - fossil_pct
 
-    # Fossil and clean group shading uses layout shapes anchored to data
-    # coordinates (xref='x', yref='y'). y0=0, y1=100 fills exactly to the
-    # top of the y-axis, not the full paper height — so the shaded bands sit
-    # correctly behind the bars like a grouped nested column chart.
+    # Group shading uses scatter fill traces rather than layout shapes.
+    # Streamlit's iframe pipeline strips SVG shapes before render; scatter
+    # traces go through the normal Plotly compositing path and always show.
+    # Each group is a filled rectangle drawn as a closed 4-point polygon.
     fossil_idx = list(range(len(FOSSIL_FUELS)))
     clean_idx  = list(range(len(FOSSIL_FUELS), len(FOSSIL_FUELS) + len(CLEAN_FUELS)))
 
-    shapes, annotations = [], []
-    for indices, color, label, grp_pct in [
+    annotations = []
+    _group_bands = [
         (fossil_idx, '#4a4a4a', 'Fossil', fossil_pct),
         (clean_idx,  '#3a6b45', 'Clean',  clean_pct),
-    ]:
+    ]
+
+    fig_grid = go.Figure()
+
+    # Group labels (Fossil xx% / Clean xx%) as annotations above the chart,
+    # and a thin vertical divider line between the two groups as the only
+    # visual separator. Shading approaches all fail in Streamlit's pipeline.
+    divider_x = len(FOSSIL_FUELS) - 0.5
+
+    for indices, color, label, grp_pct in _group_bands:
         x0 = indices[0] - 0.45
         x1 = indices[-1] + 0.45
-        # Shape spans full data height (0 to 100%) in data coordinates.
-        shapes.append(dict(
-            type='rect', layer='below',
-            x0=x0, x1=x1, y0=0, y1=100,
-            xref='x', yref='y',
-            fillcolor=color, opacity=0.15, line_width=0,
-        ))
         annotations.append(dict(
             x=(x0 + x1) / 2, y=1.06,
             xref='x', yref='paper',
             text=f'<b>{label}</b> {grp_pct:.0f}%',
             showarrow=False,
-            font=dict(size=8, color=TEXT_MID),
+            font=dict(size=10, color=color),
             xanchor='center',
         ))
 
-    fig_grid = go.Figure()
+    # Divider: a scatter trace drawing a single dashed vertical line between
+    # the last fossil fuel and first clean fuel bar. Scatter traces render
+    # reliably where shapes do not in Streamlit's SVG pipeline.
+    fig_grid.add_trace(go.Scatter(
+        x          = [divider_x, divider_x],
+        y          = [0, 108],
+        mode       = 'lines',
+        line       = dict(color=BORDER, width=1.5, dash='dot'),
+        hoverinfo  = 'skip',
+        showlegend = False,
+        cliponaxis = False,
+    ))
 
-    # Single trace: individual fuel bars rendered over the layout shapes.
+    # Bar trace added after divider so bars render on top.
     fig_grid.add_trace(go.Bar(
         x                 = x_pos,
         y                 = pct_vals,
@@ -1386,13 +1396,14 @@ with col_grid:
     ))
 
     fig_grid.update_layout(
-        shapes      = shapes,
         annotations = annotations,
         xaxis       = dict(
             tickvals  = x_pos,
-            ticktext  = fuels,
+            # Wrap multi-word fuel names with <br> so labels stack vertically
+            # instead of rotating diagonally. Single-word names are unchanged.
+            ticktext  = [f.replace(' ', '<br>') for f in fuels],
             tickfont  = dict(size=8, color=TEXT_MID),
-            tickangle = -30,
+            tickangle = 0,
             gridcolor = 'rgba(0,0,0,0)',
         ),
         yaxis       = dict(
@@ -1400,7 +1411,7 @@ with col_grid:
             title_font = dict(size=9, color=TEXT_MID),
             tickfont   = dict(size=8, color=TEXT_MID),
             gridcolor  = BORDER,
-            range      = [0, 100],
+            range      = [0, 110],
         ),
         paper_bgcolor = BG,
         # plot_bgcolor must be transparent so the layout shapes (group shading)
@@ -1415,6 +1426,30 @@ with col_grid:
     if grid_gen_available:
         st.plotly_chart(fig_grid, use_container_width=True, key='grid_chart')
 
+
+
+# ── Row 2 narrative strip ─────────────────────────────────────────────────────
+# Sits below the three charts as a reading-direction summary.
+_strip_l = 'Country bill breakdown' if selected else 'Global bill breakdown'
+_strip_r = 'Country grid: the final lever' if selected else 'Global grid: the final lever'
+_strip_m = 'What verified reporting and process change saves (e.g. steel)'
+
+st.markdown(
+    f'<hr style="border:none; border-top:1px solid {BORDER}; margin:0.5rem 0 0.6rem 0;">'
+    f'<div style="'
+    f'display:flex; align-items:center; gap:0; '
+    f'margin:0 0 0.8rem 0; '
+    f'font-size:0.72rem; color:{TEXT_MID}; letter-spacing:0.06em; text-transform:uppercase;'
+    f'">'
+    f'<span style="display:inline-flex; align-items:center; gap:0.5em; white-space:nowrap;">'
+    f'{_strip_l} <span style="color:{TEXT_LIGHT};">&#8594;</span></span>'
+    f'<span style="flex:1; display:inline-flex; align-items:center; justify-content:center; gap:0.5em; white-space:nowrap;">'
+    f'{_strip_m} <span style="color:{TEXT_LIGHT};">&#8594;</span></span>'
+    f'<span style="display:inline-flex; align-items:center; gap:0.5em; white-space:nowrap;">'
+    f'{_strip_r} <span style="color:{TEXT_LIGHT};">&#8594;</span></span>'
+    f'</div>',
+    unsafe_allow_html=True,
+)
 
 st.markdown('<br>', unsafe_allow_html=True)
 st.caption(
