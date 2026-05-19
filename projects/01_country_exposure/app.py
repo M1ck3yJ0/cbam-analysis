@@ -1141,7 +1141,7 @@ _strip_m = 'What verified reporting and process change saves (e.g. steel)'
 st.markdown(
     f'<div style="'
     f'display:flex; align-items:center; gap:0; '
-    f'margin:1.6rem 0 0.5rem 0; '
+    f'margin:-1rem 0 0.5rem 0; '
     f'font-size:0.72rem; color:{TEXT_MID}; letter-spacing:0.06em; text-transform:uppercase;'
     f'">'
     # Left label: fixed width = donut column (2/8 = 25%).
