@@ -1560,7 +1560,7 @@ _cta_cols = ''.join(
 )
 
 st.markdown(
-    f'<hr style="border:none; border-top:1px solid {BORDER}; margin:-1.5rem 0 1rem 0;">'
+    f'<hr style="border:none; border-top:1px solid {BORDER}; margin:-0.5rem 0 1rem 0;">'
     f'<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:1rem;">'
     + _cta_cols +
     f'</div>',
