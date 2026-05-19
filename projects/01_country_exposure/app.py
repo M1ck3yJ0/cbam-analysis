@@ -1379,7 +1379,7 @@ with col_eaf:
                                  gridcolor='rgba(0,0,0,0)',
                                  automargin=True),
             paper_bgcolor = BG, plot_bgcolor=BG,
-            margin        = dict(l=10, r=10, t=20, b=65),
+            margin        = dict(l=10, r=10, t=20, b=50),
             height        = 240,
             showlegend    = False,
         )
