@@ -1130,7 +1130,7 @@ with col_bar:
                 st.session_state['selected_country'] = None
             st.rerun()
 
-
+st.markdown('<div style="margin-top:-1rem;"></div>', unsafe_allow_html=True)
 
 # ── Row 2 narrative strip ─────────────────────────────────────────────────────
 # Frames the three charts as a connected argument before the reader sees them.
