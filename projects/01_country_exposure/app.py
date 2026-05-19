@@ -243,8 +243,6 @@ h1, h2, h3 {{
 .info-tooltip {{
     display: none;
     position: absolute;
-    bottom: calc(100% + 6px);
-    left: 0;
     width: 280px;
     background: {BG_CARD};
     border: 1px solid {BORDER};
@@ -261,6 +259,20 @@ h1, h2, h3 {{
     pointer-events: none;
     white-space: normal;
 }}
+/* Tooltip appears to the right of the icon, vertically centered.
+   Used for: map, sector donut, EAF chart.                        */
+.tip-right {{
+    left: calc(100% + 8px);
+    top: 50%;
+    transform: translateY(-50%);
+}}
+/* Tooltip appears to the left of the icon, vertically centered.
+   Used for: top 10 bar, grid generation mix.                     */
+.tip-left {{
+    right: calc(100% + 8px);
+    top: 50%;
+    transform: translateY(-50%);
+}}
 .info-icon:hover .info-tooltip,
 .info-wrap:hover .info-tooltip {{
     display: block;
@@ -273,14 +285,20 @@ h1, h2, h3 {{
 # Renders a section label with an inline ⓘ icon. Hovering the icon shows
 # the tooltip text above the label. Call wherever a section-label is rendered.
 # Extra inline style overrides (e.g. margin) can be passed via extra_style.
-def info_label(label: str, tooltip: str, extra_style: str = '') -> str:
-    """Return an HTML string: LABEL text + hover info icon with tooltip."""
+def info_label(label: str, tooltip: str, extra_style: str = '',
+               tip_side: str = 'tip-right') -> str:
+    """Return an HTML string: LABEL text + hover info icon with tooltip.
+
+    tip_side controls the tooltip direction:
+      'tip-right' : tooltip opens to the right (map, donut, EAF chart)
+      'tip-left'  : tooltip opens to the left  (top 10 bar, grid mix)
+    """
     return (
         f'<p class="section-label" style="{extra_style}">'
         f'{label}'
         f'<span class="info-wrap" style="margin-left:0.4em;">'
         f'<span class="info-icon">ⓘ'
-        f'<span class="info-tooltip">{tooltip}</span>'
+        f'<span class="info-tooltip {tip_side}">{tooltip}</span>'
         f'</span>'
         f'</span>'
         f'</p>'
@@ -636,14 +654,22 @@ with k1:
     if selected and sel_cost is not None:
         st.markdown(
             f'<div class="kpi-card-country">'
-            f'<div class="kpi-label">Est. CBAM Bill — {selected}</div>'
+            f'<div class="kpi-label">Estimated CBAM Bill</div>'
             f'<div class="kpi-value">€{sel_cost/1e6:.1f}M</div>'
             f'<div class="kpi-sub">{sel_co2/1e6:.2f} MtCO₂ embedded</div>'
+            f'</div>', unsafe_allow_html=True)
+    elif selected:
+        # Country selected but no cost data available in the filtered dataset
+        st.markdown(
+            f'<div class="kpi-card-neutral">'
+            f'<div class="kpi-label">Estimated CBAM Bill</div>'
+            f'<div class="kpi-value">N/A</div>'
+            f'<div class="kpi-sub">No data for selected sectors</div>'
             f'</div>', unsafe_allow_html=True)
     else:
         st.markdown(
             f'<div class="kpi-card">'
-            f'<div class="kpi-label">Total Est. CBAM Bill</div>'
+            f'<div class="kpi-label">Est. CBAM Bill — Global</div>'
             f'<div class="kpi-value">€{total_cost_high/1e9:.2f}B</div>'
             f'<div class="kpi-sub">{total_co2/1e6:.1f} MtCO₂ embedded</div>'
             f'</div>', unsafe_allow_html=True)
@@ -652,26 +678,26 @@ with k2:
     # CBAM cost as % of the country's total global CBAM-sector exports.
     # Matches the map's '% of exports' metric exactly.
     # Sub-line shows Global and EU CBAM export values on one compact line.
-    if selected and sel_pct is not None and pd.notna(sel_pct):
+    if selected:
+        # Build export sub-line only when both values are available
         sub_parts = []
-        if sel_global_exp and pd.notna(sel_global_exp):
-            sub_parts.append(f'Global: €{sel_global_exp/1e9:.2f}B')
         if sel_eu_imp:
-            sub_parts.append(f'EU: €{sel_eu_imp/1e9:.2f}B')
-        sub_str = '  ·  '.join(sub_parts)
-        # If ratio is None (fallback country), show a data quality note
-        # instead of a potentially misleading percentage.
+            sub_parts.append(f'To EU €{sel_eu_imp/1e9:.2f}B')
+        if sel_global_exp and pd.notna(sel_global_exp):
+            sub_parts.append(f'To World €{sel_global_exp/1e9:.2f}B')
+        sub_str = ' · '.join(sub_parts)
         if sel_pct is None or pd.isna(sel_pct):
+            # No Comtrade export data for this country
             st.markdown(
-                f'<div class="kpi-card-country">'
-                f'<div class="kpi-label">CBAM Cost as % of CBAM-Sector Exports — {selected}</div>'
+                f'<div class="kpi-card-neutral">'
+                f'<div class="kpi-label">CBAM-Sector Exports to EU</div>'
                 f'<div class="kpi-value">N/A</div>'
                 f'<div class="kpi-sub">No 2024 Comtrade export data available</div>'
                 f'</div>', unsafe_allow_html=True)
         else:
             st.markdown(
                 f'<div class="kpi-card-country">'
-                f'<div class="kpi-label">CBAM Cost as % of CBAM-Sector Exports — {selected}</div>'
+                f'<div class="kpi-label">CBAM-Sector Exports to EU</div>'
                 f'<div class="kpi-value">{sel_pct:.1f}%</div>'
                 f'<div class="kpi-sub">{sub_str}</div>'
                 f'</div>', unsafe_allow_html=True)
@@ -679,9 +705,9 @@ with k2:
         pct_str = f'{global_pct_exp:.1f}%' if global_pct_exp else 'N/A'
         st.markdown(
             f'<div class="kpi-card">'
-            f'<div class="kpi-label">CBAM-Sector Exports Reaching EU</div>'
+            f'<div class="kpi-label">CBAM-Sector Exports to EU</div>'
             f'<div class="kpi-value">{pct_str}</div>'
-            f'<div class="kpi-sub">Global: €{total_global_exp/1e9:.1f}B  ·  EU: €{total_eu_imports/1e9:.1f}B</div>'
+            f'<div class="kpi-sub">Total Global: €{total_global_exp/1e9:.1f}B, To EU: €{total_eu_imports/1e9:.1f}B</div>'
             f'</div>', unsafe_allow_html=True)
 
 with k3:
@@ -689,9 +715,17 @@ with k3:
         country_share = sel_cost / total_cost_high * 100
         st.markdown(
             f'<div class="kpi-card-country">'
-            f'<div class="kpi-label">Share of Global CBAM Bill — {selected}</div>'
+            f'<div class="kpi-label">Share of Global CBAM Bill</div>'
             f'<div class="kpi-value">{country_share:.1f}%</div>'
             f'<div class="kpi-sub">Ranked #{sel_rank} globally</div>'
+            f'</div>', unsafe_allow_html=True)
+    elif selected:
+        # Country selected but no cost data available in the filtered dataset
+        st.markdown(
+            f'<div class="kpi-card-neutral">'
+            f'<div class="kpi-label">Share of Global CBAM Bill</div>'
+            f'<div class="kpi-value">N/A</div>'
+            f'<div class="kpi-sub">No data for selected sectors</div>'
             f'</div>', unsafe_allow_html=True)
     else:
         st.markdown(
@@ -707,15 +741,15 @@ with k4:
         diff_str = f'{"+" if diff > 0 else ""}{diff:.0f} vs global avg ({global_grid_avg:.0f})'
         st.markdown(
             f'<div class="kpi-card-country">'
-            f'<div class="kpi-label">Grid Intensity — {selected}</div>'
-            f'<div class="kpi-value">{sel_grid:.0f} gCO₂/kWh</div>'
+            f'<div class="kpi-label">Grid Intensity</div>'
+            f'<div class="kpi-value">{sel_grid:.0f}<span style="font-size:0.68rem; font-weight:400; color:{TEXT_DARK}; margin-left:0.2em;">gCO₂/kWh</span></div>'
             f'<div class="kpi-sub">{diff_str}</div>'
             f'</div>', unsafe_allow_html=True)
     elif selected:
         # Country selected but no 2024 Ember grid data available
         st.markdown(
             f'<div class="kpi-card-neutral">'
-            f'<div class="kpi-label">Grid Intensity — {selected}</div>'
+            f'<div class="kpi-label">Grid Intensity</div>'
             f'<div class="kpi-value">N/A</div>'
             f'<div class="kpi-sub">No 2024 Ember data available</div>'
             f'</div>', unsafe_allow_html=True)
@@ -723,7 +757,7 @@ with k4:
         st.markdown(
             f'<div class="kpi-card">'
             f'<div class="kpi-label">Global Avg Grid Intensity</div>'
-            f'<div class="kpi-value">{global_grid_avg:.0f} gCO₂/kWh</div>'
+            f'<div class="kpi-value">{global_grid_avg:.0f}<span style="font-size:0.68rem; font-weight:400; color:{TEXT_DARK}; margin-left:0.2em;">gCO₂/kWh</span></div>'
             f'<div class="kpi-sub">Source: Ember 2024</div>'
             f'</div>', unsafe_allow_html=True)
 
@@ -798,7 +832,7 @@ with col_map:
             'Data: Eurostat COMEXT, UN Comtrade, EU Commission defaults.'
         )
         st.markdown(
-            info_label(map_title, _map_tooltip, 'margin-bottom:0.05rem;')
+            info_label(map_title, _map_tooltip, 'margin-bottom:0.05rem;', tip_side='tip-right')
             + f'<p style="font-size:0.62rem; color:{TEXT_LIGHT}; margin:0;">'
             f'Click to select · click again to deselect</p>',
             unsafe_allow_html=True)
@@ -899,7 +933,7 @@ with col_bar:
         'Placeholder: full methodology note to be added.'
     )
     st.markdown(
-        info_label(f'Top 10 — {bar_label.lower()}', _bar_tooltip),
+        info_label(f'Top 10 — {bar_label.lower()}', _bar_tooltip, tip_side='tip-left'),
         unsafe_allow_html=True)
 
     df_top10 = (
@@ -974,7 +1008,7 @@ with col_donut:
         'Sector filter (top bar) controls which sectors appear here. '
         'Placeholder: full methodology note to be added.'
     )
-    st.markdown(info_label(donut_label, _donut_tooltip), unsafe_allow_html=True)
+    st.markdown(info_label(donut_label, _donut_tooltip, tip_side='tip-right'), unsafe_allow_html=True)
 
     # The sector pivot columns in df_sector_pivots are stored at BASE_PRICE.
     # Rescale to the current certificate price before rendering.
@@ -1041,6 +1075,7 @@ with col_eaf:
         info_label(
             f'Steel CBAM cost per tonne — default vs verified · {context_label}',
             _eaf_tooltip,
+            tip_side='tip-right',
         ),
         unsafe_allow_html=True)
 
@@ -1171,12 +1206,6 @@ with col_eaf:
 
         st.plotly_chart(fig_eaf, use_container_width=True, key='eaf_chart')
 
-        # Methodology detail has moved into the chart title's info icon tooltip.
-        st.markdown(
-            f'<p class="method-note">'
-            f'Hover the ⓘ icon above for full methodology notes.'
-            f'</p>',
-            unsafe_allow_html=True)
 
 # ── Grid generation mix chart ────────────────────────────────────────────────
 # Shows each fuel type as a share of total electricity generation (%).
@@ -1194,7 +1223,7 @@ with col_grid:
         'Grid intensity (gCO\u2082/kWh) feeds directly into the EAF verified scenario bars. '
         'Placeholder: full methodology note to be added.'
     )
-    st.markdown(info_label(grid_label, _grid_tooltip), unsafe_allow_html=True)
+    st.markdown(info_label(grid_label, _grid_tooltip, tip_side='tip-left'), unsafe_allow_html=True)
 
     # Aggregate generation by fuel type for the selected country or globally.
     # If the selected country has no 2024 Ember generation data, show a
