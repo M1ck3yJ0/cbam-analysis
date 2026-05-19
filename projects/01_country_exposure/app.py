@@ -215,8 +215,76 @@ h1, h2, h3 {{
 }}
 [data-testid="stSlider"] {{ padding-top: 0.1rem; padding-bottom: 0; }}
 [data-testid="stDataFrame"] {{ border-radius: 6px; overflow: hidden; }}
+
+/* ── Info icon tooltip ──────────────────────────────────────────────────────
+   .info-icon   : the ⓘ glyph, inline with the section label text.
+   .info-tooltip: the pop-up box, hidden until hover.
+   position:relative on the wrapper allows the tooltip to anchor correctly.
+   z-index:1000 ensures it floats above Plotly chart canvases.         */
+.info-wrap {{
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3em;
+    position: relative;
+}}
+.info-icon {{
+    font-size: 0.65rem;
+    color: {TEXT_LIGHT};
+    cursor: default;
+    line-height: 1;
+    user-select: none;
+    /* keep the icon vertically aligned with the label caps */
+    position: relative;
+    top: -0.05em;
+}}
+.info-icon:hover {{
+    color: {TEXT_MID};
+}}
+.info-tooltip {{
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 0;
+    width: 280px;
+    background: {BG_CARD};
+    border: 1px solid {BORDER};
+    border-radius: 6px;
+    padding: 0.55rem 0.7rem;
+    font-size: 0.62rem;
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
+    color: {TEXT_MID};
+    line-height: 1.5;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.10);
+    z-index: 1000;
+    pointer-events: none;
+    white-space: normal;
+}}
+.info-icon:hover .info-tooltip,
+.info-wrap:hover .info-tooltip {{
+    display: block;
+}}
 </style>
 """, unsafe_allow_html=True)
+
+
+# ── Info label helper ─────────────────────────────────────────────────────────
+# Renders a section label with an inline ⓘ icon. Hovering the icon shows
+# the tooltip text above the label. Call wherever a section-label is rendered.
+# Extra inline style overrides (e.g. margin) can be passed via extra_style.
+def info_label(label: str, tooltip: str, extra_style: str = '') -> str:
+    """Return an HTML string: LABEL text + hover info icon with tooltip."""
+    return (
+        f'<p class="section-label" style="{extra_style}">'
+        f'{label}'
+        f'<span class="info-wrap" style="margin-left:0.4em;">'
+        f'<span class="info-icon">ⓘ'
+        f'<span class="info-tooltip">{tooltip}</span>'
+        f'</span>'
+        f'</span>'
+        f'</p>'
+    )
 
 
 # ── Database connection ───────────────────────────────────────────────────────
@@ -719,9 +787,19 @@ with col_map:
             st.session_state['map_metric'] = _new_metric
             st.rerun()
     with _hdr_title:
+        # Map title includes the info icon and a subtitle hint on the line below.
+        _map_tooltip = (
+            'Choropleth shading reflects the active metric (toggle top-right). '
+            'Absolute cost: total estimated CBAM certificate spend at the selected price. '
+            'Cost per tonne: CBAM cost divided by EU-imported tonnes. '
+            '% of exports: CBAM cost as a share of the country\'s total global '
+            'CBAM-sector export value — the primary exposure indicator. '
+            'All costs use the high-route embedded CO\u2082 figure. '
+            'Data: Eurostat COMEXT, UN Comtrade, EU Commission defaults.'
+        )
         st.markdown(
-            f'<p class="section-label" style="margin-bottom:0.05rem;">{map_title}</p>'
-            f'<p style="font-size:0.62rem; color:{TEXT_LIGHT}; margin:0;">'
+            info_label(map_title, _map_tooltip, 'margin-bottom:0.05rem;')
+            + f'<p style="font-size:0.62rem; color:{TEXT_LIGHT}; margin:0;">'
             f'Click to select · click again to deselect</p>',
             unsafe_allow_html=True)
     df_map = df_c[df_c[metric_col].notna() & (df_c[metric_col] > 0)].copy()
@@ -802,7 +880,9 @@ with col_map:
                     clicked_name = match.iloc[0]['country']
                     if clicked_name != st.session_state['selected_country']:
                         st.session_state['selected_country'] = clicked_name
-                        st.rerun()
+                    else:
+                        st.session_state['selected_country'] = None
+                    st.rerun()
 
 with col_bar:
     bar_label = {
@@ -811,8 +891,15 @@ with col_bar:
         'Cost / tonne' : 'Est. CBAM cost per tonne (€)',
     }.get(map_metric, 'Estimated CBAM cost (€)')
 
+    # Top 10 bar chart info tooltip — placeholder text to be refined later.
+    _bar_tooltip = (
+        f'The 10 countries with the highest {bar_label.lower()}. '
+        'Metric matches the active map toggle. '
+        'Highlighted bar (orange) indicates the currently selected country. '
+        'Placeholder: full methodology note to be added.'
+    )
     st.markdown(
-        f'<p class="section-label">Top 10 — {bar_label.lower()}</p>',
+        info_label(f'Top 10 — {bar_label.lower()}', _bar_tooltip),
         unsafe_allow_html=True)
 
     df_top10 = (
@@ -880,8 +967,14 @@ col_donut, col_eaf, col_grid = st.columns([1, 2, 2], gap='large')
 # ── Sector donut ──────────────────────────────────────────────────────────────
 with col_donut:
     donut_label = f'Cost by sector — {selected}' if selected else 'Global cost by sector'
-    st.markdown(f'<p class="section-label">{donut_label}</p>',
-                unsafe_allow_html=True)
+    # Sector donut info tooltip — placeholder text to be refined later.
+    _donut_tooltip = (
+        'Estimated CBAM cost broken down by sector, at the selected certificate price. '
+        'Uses the high-route embedded CO\u2082 figure for each sector. '
+        'Sector filter (top bar) controls which sectors appear here. '
+        'Placeholder: full methodology note to be added.'
+    )
+    st.markdown(info_label(donut_label, _donut_tooltip), unsafe_allow_html=True)
 
     # The sector pivot columns in df_sector_pivots are stored at BASE_PRICE.
     # Rescale to the current certificate price before rendering.
@@ -935,9 +1028,20 @@ with col_donut:
 # ── EAF scenario chart ────────────────────────────────────────────────────────
 with col_eaf:
     context_label = selected if selected else 'global avg'
+    # EAF chart info tooltip — uses the existing method-note text as its source.
+    _eaf_tooltip = (
+        'Default bars use EU CBAM default values x certificate price. '
+        'Verified EAF bars use Worldsteel Scrap-EAF direct emissions (0.69 tCO\u2082/t) '
+        '+ indirect (450 kWh/t x grid intensity). '
+        'No markup on verified submissions. '
+        'Clean grid benchmark: Norway 29.66 gCO\u2082/kWh (Ember 2024). '
+        'Switch steel grade via the dropdown to compare Carbon vs Low Alloy routes.'
+    )
     st.markdown(
-        f'<p class="section-label">Steel CBAM cost per tonne — '
-        f'default vs verified · {context_label}</p>',
+        info_label(
+            f'Steel CBAM cost per tonne — default vs verified · {context_label}',
+            _eaf_tooltip,
+        ),
         unsafe_allow_html=True)
 
     # Route dropdown — above the chart, full width of this column
@@ -1067,13 +1171,10 @@ with col_eaf:
 
         st.plotly_chart(fig_eaf, use_container_width=True, key='eaf_chart')
 
+        # Methodology detail has moved into the chart title's info icon tooltip.
         st.markdown(
             f'<p class="method-note">'
-            f'Default bars use EU CBAM default values × certificate price. '
-            f'Verified EAF bars use Worldsteel Scrap-EAF direct emissions '
-            f'(0.69 tCO₂/t) + indirect ({EAF_ELECTRICITY_KWH_PER_T} kWh/t × grid intensity). '
-            f'No markup on verified submissions. '
-            f'Clean grid: {CLEAN_GRID_COUNTRY} {CLEAN_GRID_INTENSITY} gCO₂/kWh (Ember 2024).'
+            f'Hover the ⓘ icon above for full methodology notes.'
             f'</p>',
             unsafe_allow_html=True)
 
@@ -1085,8 +1186,15 @@ with col_eaf:
 with col_grid:
     grid_label = (f'Grid generation mix — {selected}'
                   if selected else 'Global grid generation mix')
-    st.markdown(f'<p class="section-label">{grid_label}</p>',
-                unsafe_allow_html=True)
+    # Grid chart info tooltip — placeholder text to be refined later.
+    _grid_tooltip = (
+        'Share of total electricity generation by fuel type, from Ember 2024 data. '
+        'Fossil group: Coal, Gas, Other Fossil. '
+        'Clean group: Hydro, Wind, Solar, Nuclear, Other Renewables. '
+        'Grid intensity (gCO\u2082/kWh) feeds directly into the EAF verified scenario bars. '
+        'Placeholder: full methodology note to be added.'
+    )
+    st.markdown(info_label(grid_label, _grid_tooltip), unsafe_allow_html=True)
 
     # Aggregate generation by fuel type for the selected country or globally.
     # If the selected country has no 2024 Ember generation data, show a
