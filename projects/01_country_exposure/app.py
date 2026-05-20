@@ -320,6 +320,10 @@ h1, h2, h3 {{
 .info-wrap:hover .info-tooltip {{
     display: block;
 }}
+
+[data-testid="stAppViewContainer"] {{
+    min-width: 1100px !important;
+}}
 </style>
 """, unsafe_allow_html=True)
 
