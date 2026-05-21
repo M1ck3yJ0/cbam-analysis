@@ -39,7 +39,7 @@ The schema below shows table relationships across trade flows, emissions
 defaults, production routes, grid intensity, and country reference data.
 
 <p align="center">
-  <img src="db/schema_diagram.png" width="600"/>
+  <img src="db/schema_diagram.png" width="500"/>
 </p>
 
 ---
