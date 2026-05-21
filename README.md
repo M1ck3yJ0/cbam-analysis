@@ -38,7 +38,9 @@ The project consolidates six datasets into a normalized SQLite database.
 The schema below shows table relationships across trade flows, emissions
 defaults, production routes, grid intensity, and country reference data.
 
-![Database schema diagram](db/schema_diagram.png)
+<p align="center">
+  <img src="db/schema_diagram.png" width="600"/>
+</p>
 
 ---
 
@@ -64,19 +66,6 @@ Key sources include:
 - Grid carbon intensity by country (gCO2/kWh)
 - Steel production route emission intensities (BF-BOF, Scrap-EAF, DRI-EAF)
   sourced from Worldsteel global averages
-
----
-
-## CBAM-Covered Materials
-
-Cement, iron and steel, aluminium, fertilizers, hydrogen, electricity.
-
-**Note on electricity:** Electricity is covered under CBAM but is treated
-differently from the other five sectors. Rather than applying a per-tonne
-default emission value, charges on imported electricity are based on the
-carbon intensity of the exporting country's power grid. Electricity is
-therefore excluded from the trade flow data, but grid carbon intensity
-data from Ember is included in the dataset and covers all 215 countries.
 
 ---
 
@@ -114,3 +103,8 @@ and obtaining API keys for any data sources fetched programmatically
 Data pipeline complete. All six datasets extracted, cleaned, and loaded
 into a structured SQLite database. First analytical output published.
 Further analysis in progress.
+
+---
+
+## Acknowledgements
+This project was developed with assistance from Claude, which supported rapid code development/debugging and README drafting. All analytical decisions, pipeline choices, and results interpretation are the author's own.
