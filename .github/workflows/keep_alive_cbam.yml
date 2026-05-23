@@ -1,0 +1,15 @@
+name: Keep CBAM Streamlit App Alive
+
+on:
+  schedule:
+    - cron: '0 12 * * 1,4'  # Every Monday and Thursday at noon UTC
+  workflow_dispatch:          # Allows manual trigger from GitHub Actions tab
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Streamlit app
+        run: |
+          curl -s -o /dev/null -w "%{http_code}" \
+          https://milcahjoseph-cbam-dashboard.streamlit.app
