@@ -2,7 +2,7 @@ name: Keep CBAM Streamlit App Alive
 
 on:
   schedule:
-    - cron: '0 0,8,16 * * *' # Runs every 8 hours to stay within Streamlit's 12 hour sleep window
+    - cron: '0 0,8,16 * * *'  # Runs every 8 hours to stay within Streamlit's 12 hour sleep window
   workflow_dispatch:          # Allows manual trigger from GitHub Actions tab
 
 jobs:
