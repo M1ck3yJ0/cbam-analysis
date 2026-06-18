@@ -2,14 +2,31 @@ name: Keep CBAM Streamlit App Alive
 
 on:
   schedule:
-    - cron: '0 0,8,16 * * *'  # Runs every 8 hours to stay within Streamlit's 12 hour sleep window
-  workflow_dispatch:          # Allows manual trigger from GitHub Actions tab
+    - cron: '0 0,8,16 * * *'  # Runs every 8 hours (midnight, 8am, 4pm UTC)
+  workflow_dispatch:            # Allows manual trigger from the GitHub Actions tab
 
 jobs:
-  ping:
+  keepalive:
     runs-on: ubuntu-latest
+    timeout-minutes: 10          # Safety cap so a stuck browser cannot run indefinitely
     steps:
-      - name: Ping Streamlit app
+      # Check out the repository so the workflow can access the keepalive script.
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      # Install a pinned Python version for a predictable, reproducible runtime.
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Install Playwright, then download Chromium along with the system libraries it
+      # needs. The --with-deps flag handles those OS-level dependencies automatically.
+      - name: Install Playwright and Chromium
         run: |
-          curl -s -o /dev/null -w "%{http_code}" \
-          https://milcahjoseph-cbam-dashboard.streamlit.app
+          pip install playwright
+          playwright install chromium --with-deps
+
+      # Run the keep-alive script, which visits the app in a real headless browser.
+      - name: Visit the Streamlit app
+        run: python projects/01_country_exposure/keepalive.py
