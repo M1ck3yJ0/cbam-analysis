@@ -107,4 +107,7 @@ Further analysis in progress.
 ---
 
 ## Acknowledgements
-This project was developed with assistance from Claude, which supported rapid code development/debugging and README drafting. All analytical decisions, pipeline choices, and results interpretation are the author's own.
+
+Analysis, pipeline and interpretation are the author's own.
+
+Claude was used for assistance with debugging code snippets and for README drafting.
