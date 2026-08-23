@@ -103,11 +103,3 @@ and obtaining API keys for any data sources fetched programmatically
 Data pipeline complete. All six datasets extracted, cleaned, and loaded
 into a structured SQLite database. First analytical output published.
 Further analysis in progress.
-
----
-
-## Acknowledgements
-
-Analysis, pipeline and interpretation are the author's own.
-
-Claude was used for assistance with debugging code snippets and for README drafting.
