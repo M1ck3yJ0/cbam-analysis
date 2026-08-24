@@ -1,4 +1,4 @@
-# CBAM Exposure: What Actually Moves an Importer's Carbon Bill
+# CBAM Exposure: What Actually Impacts an Importer's Carbon Bill
 
 *CBAM costs, export exposure, and savings potential across 119 economies and the six covered sectors. 2024 data.*
 
@@ -104,7 +104,6 @@ cbam-analysis/
 ├── db/               # SQLite database (generated, committed)
 ├── notebooks/        # numbered pipeline notebooks (01-08) and analysis
 ├── projects/         # analytical outputs, one subdirectory per project
-├── src/              # reusable functions and modules (planned)
 ├── README.md
 └── requirements.txt
 ```
